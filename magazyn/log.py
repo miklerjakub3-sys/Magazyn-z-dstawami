@@ -1,0 +1,89 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""magazyn.log
+
+Proste logowanie aplikacji (RotatingFileHandler) + globalny handler wyjątków.
+Działa zarówno z CLI, jak i z PySide6 (QMessageBox).
+"""
+
+from __future__ import annotations
+
+import logging
+import os
+import sys
+import traceback
+from logging.handlers import RotatingFileHandler
+from typing import Optional, Callable
+
+from .config import LOG_FILE, MAX_LOG_SIZE, ensure_dirs
+
+
+_LOGGER: Optional[logging.Logger] = None
+
+
+def get_logger(name: str = "magazyn") -> logging.Logger:
+    global _LOGGER
+    if _LOGGER is not None:
+        return _LOGGER
+
+    ensure_dirs()
+    logger = logging.getLogger(name)
+    logger.setLevel(logging.INFO)
+
+    # unikaj duplikowania handlerów
+    if not logger.handlers:
+        handler = RotatingFileHandler(
+            LOG_FILE,
+            maxBytes=MAX_LOG_SIZE,
+            backupCount=5,
+            encoding="utf-8",
+        )
+        fmt = logging.Formatter(
+            fmt="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
+            datefmt="%Y-%m-%d %H:%M:%S",
+        )
+        handler.setFormatter(fmt)
+        logger.addHandler(handler)
+
+        console = logging.StreamHandler(sys.stdout)
+        console.setFormatter(fmt)
+        logger.addHandler(console)
+
+    _LOGGER = logger
+    return logger
+
+
+def install_excepthook(show_dialog: bool = True) -> None:
+    """Instaluje globalny sys.excepthook, zapisuje stacktrace do loga.
+    Jeśli show_dialog=True i PySide6 jest dostępny, pokaże QMessageBox.
+    """
+    logger = get_logger("magazyn")
+
+    def _hook(exc_type, exc, tb):
+        try:
+            logger.error("Unhandled exception", exc_info=(exc_type, exc, tb))
+        except Exception:
+            # ostatnia deska ratunku
+            try:
+                with open(LOG_FILE, "a", encoding="utf-8") as f:
+                    f.write("\n" + "=" * 80 + "\n")
+                    traceback.print_exception(exc_type, exc, tb, file=f)
+            except Exception:
+                pass
+
+        if show_dialog:
+            try:
+                from PySide6.QtWidgets import QMessageBox
+                QMessageBox.critical(
+                    None,
+                    "Błąd programu",
+                    f"Wystąpił błąd. Szczegóły zapisano w pliku:\n{os.path.abspath(LOG_FILE)}\n\nBłąd: {exc}",
+                )
+            except Exception:
+                # fallback: stderr
+                try:
+                    sys.stderr.write(f"Unhandled exception: {exc}\n")
+                except Exception:
+                    pass
+
+    sys.excepthook = _hook

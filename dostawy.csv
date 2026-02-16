@@ -1,0 +1,137 @@
+id;delivery_date;sender;courier;type;tracking;vat;notes;created_at
+144;2026-02-04;TPV;FEEDEX;WYNAJEM;1100339088253012784002061369;;Zwrot dla hikrobot;2026-02-04T14:59:35
+143;2026-02-04;Autopartner;DHL;SERWIS;JJD000030221113000000053180;;C66 na serwis;2026-02-04T14:22:27
+142;2026-02-04;Autopartner;DHL;SERWIS;JJD000030221113000000053286;;C66 na serwis;2026-02-04T14:22:17
+140;2026-02-02;Autopartner;DHL;SERWIS;JJD000030221113000000053073;;C66 na serwis- bład z systemem - gwarancja;2026-02-02T15:25:10
+139;2026-02-02;Pulster;DHL;MAGAZYN;;;10 używanych workabout G4 + 10 akumulatorów;2026-02-02T14:27:35
+136;2026-02-02;Technica Group;DPD;WYNAJEM;%00613690052964654155W101616;;4 sztuki Chainway C61 SE4850 na serwis, mają karetczki co mają uszkodzone.;2026-02-02T08:01:35
+131;2026-01-29;Vemco;DHL;SERWIS;;;Workabout G4 na niedziałającą antenę.;2026-01-30T11:15:31
+128;2026-01-23;Mauser Electronics;Feedex;MAGAZYN;;;Podzespół;2026-01-30T11:15:31
+127;2026-01-23;Zebra;Feedex;MAGAZYN;;;Symbol MC92 - zebra bez akumulatora i bez stacji do przetargu;2026-01-30T11:15:31
+126;2026-01-23;Chainway;DHL;MAGAZYN;;;10x otok MC21 | 10x Stacja MC21 | 10x MC21 Daw-Systems | 2x C72 Newland RFID | 3x Chainway R1;2026-01-30T11:15:31
+135;2026-01-22;Autopartner;DPD;SERWIS;;;C66 na serwis skanera, który niedokładnie czyta;2026-01-30T13:04:33
+137;2026-01-20;Jarltech;DPD;WYNAJEM;;;Zwrot przewodów dla TPV;2026-02-02T13:30:14
+134;2026-01-20;Nadleśnictwo henryków;Poczta Polska;SERWIS;;;Bixolon R410 na serwis, w ujemnych temperaturach słabo drukuje BEGBBMKA21010126 Mytych Wrocław;2026-01-30T13:04:22
+122;2026-01-20;TPV;DPD;MAGAZYN;;;Zwrot RK410 i RK370;2026-01-30T11:15:31
+130;2026-01-19;Autopartner;DHL;SERWIS;;;C66 na serwis ekranu;2026-01-30T11:15:31
+125;2026-01-19;Tagi;DPD;MAGAZYN;;;Tagi NFC karty Mifere;2026-01-30T11:15:31
+121;2026-01-15;Fir Emi Jac Trz;DPD;MAGAZYN;00613691034514579313U101616;;Etykiety na parkomaty;2026-01-30T11:15:31
+118;2026-01-09;Energomoc;UPS;WYNAJEM;;;2 x licznii MA110m z pomarańczowymi pokretlami, jeden mniejszy, drugi większy, ale to te same modele;2026-01-30T11:15:31
+117;2026-01-09;system7;DPD;MAGAZYN;;;12 rodzajów tagow + 1 powtórzony * 2 sztuki wszystkiego;2026-01-30T11:15:31
+120;2026-01-07;Shenzen;DHL;MAGAZYN;;;Urovo DT66 z chin z przymiarki;2026-01-30T11:15:31
+119;2026-01-07;Vemco;DPD;SERWIS;;;2x workabout g4 na serwis, antena i wyświetlacz do wymiany;2026-01-30T11:15:31
+115;2025-12-22;Ingram;DHL;MAGAZYN;;;Zebra S20 3 sztuki dla TPV;2026-01-30T11:15:31
+116;2025-12-19;Copernic;UPS;MAGAZYN;;;3 x copernic 1010 + 3 stacje;2026-01-30T11:15:31
+114;2025-12-19;Autopartner;DHL;SERWIS;;;Chainay C66;2026-01-30T11:15:31
+113;2025-12-19;Unito;DHL;MAGAZYN;;;Folie do Workabout G4;2026-01-30T11:15:31
+111;2025-12-17;Kinwo;UPS;MAGAZYN;;;Futerały do Ulefona 7 i pod SAS;2026-01-30T11:15:31
+110;2025-12-10;Chainway;DHL;MAGAZYN;;;;2026-01-30T11:15:31
+109;2025-12-09;TME;Poczta Polska;MAGAZYN;;;Złącza i przewody pod RFID;2026-01-30T11:15:31
+108;2025-12-09;Autopartner;DPD;SERWIS;;;C66 na serwis SIM;2026-01-30T11:15:31
+107;2025-12-04;SAS;GLS;SERWIS;;;C72 na seriws;2026-01-30T11:15:31
+106;2025-12-04;Autopartner;DPD;SERWIS;;;C66 23r na serwis | HC660BE230200029;2026-01-30T11:15:31
+105;2025-12-03;Pulster;DHL;WYNAJEM;;;10x workabou g4 preowned;2026-01-30T11:15:31
+104;2025-12-01;Hikrobot;UPS;MAGAZYN;;;Hikrobot dla firstbita;2026-01-30T11:15:31
+103;2025-12-01;Nadleśnictwo Kościan;Poczta Polska;MAGAZYN;;;odkup z Nadleśnictwa 10 x dt50 | 6 x MEFA18;2026-01-30T11:15:31
+141;2025-11-24;Tauron Marek Kołodziej;DPD;SERWIS;;;A54 na serwis płyty;2026-02-03T10:18:16
+101;2025-11-24;Ingram;DPD;MAGAZYN;;;Honeywel Ck67;2026-01-30T11:15:31
+100;2025-11-24;Azoty;DPD;SERWIS;;;4 workabout g4 na serwis ekranów;2026-01-30T11:15:31
+102;2025-11-20;TPV;UPS;MAGAZYN;;;Hikrobot do zwrotu;2026-01-30T11:15:31
+99;2025-11-17;Jarltech;DHL;MAGAZYN;;;Przewód czerwony pod Honeywell;2026-01-30T11:15:31
+98;2025-11-12;Tauron Legnica;Poczta Polska;SERWIS;;;A54 na serwis;2026-01-30T11:15:31
+97;2025-11-06;Energomoc;UPS;MAGAZYN;;;2 liczniki chińskie;2026-01-30T11:15:31
+94;2025-11-04;Hikrobot;UPS;MAGAZYN;;;Hikrobot do firstbita, skanera optyczny;2026-01-30T11:15:31
+96;2025-10-29;Autopartner;DHL;SERWIS;;;HC6609E220100008 Wymiana wyświetlacza | HC6609E220100008 Naklejenie folii | HC6609E200900784 Wymiana wyświetlacza | HC6609E200900784 Naklejenie folii | HC6609E200900784 Wymiana akumulatora z J295202141002037 | na J295202222001394;2026-01-30T11:15:31
+95;2025-10-28;Vemco;DPD;SERWIS;;;Workabout g4 x 2 na niedziałające RFID;2026-01-30T11:15:31
+93;2025-10-21;TPV;DPD;WYPOŻYCZENIE;;;23049B891A HCB-PWR-02 50166604-001 50166603-001;2026-01-30T11:15:31
+92;2025-10-20;Unicard;UPS;WYPOŻYCZENIE;;;Copernicus urządzenia ze zwrotu;2026-01-30T11:15:31
+91;2025-10-20;Wodociągi Tarnowskie;DPD;SERWIS;;;WK3 na akualizacje | Wk4 na aktualizacje | WK4 na naprawe;2026-01-30T11:15:31
+90;2025-10-10;Autopartner;DPD;SERWIS;;;c66 na aktualizacje;2026-01-30T11:15:31
+89;2025-10-08;SAS;DPD;SERWIS;;;C72 na wymiane akumulatora;2026-01-30T11:15:31
+88;2025-10-01;Autopartner;DHL;SERWIS;;;C66 na serwis;2026-01-30T11:15:31
+84;2025-09-24;GZGK Trzebnica;DPD;SERWIS;;;MEFA-18M na wymianę rolek;2026-01-30T11:15:31
+87;2025-09-22;Technica Group;DPD;SERWIS;;;Chainway C61 3 sztuki, jeden dawca, dwa na słabe skanowanie;2026-01-30T11:15:31
+86;2025-09-18;Autopartner;DPD;SERWIS;;;C66 na serwis engine;2026-01-30T11:15:31
+83;2025-09-11;Autopartner;DHL;SERWIS;;;2x c66 na serwis wyswietlacza i słabego skanowania;2026-01-30T11:15:31
+82;2025-09-11;PS Info Pietrzyk;GLS;SERWIS;;;C72 na serwis akumulatora;2026-01-30T11:15:31
+85;2025-09-08;PS Info Pietrzyk;DPD;SERWIS;;;C72;2026-01-30T11:15:31
+81;2025-09-01;Universal Fibers;Feedex;MAGAZYN;;;U300 + mała antena;2026-01-30T11:15:31
+80;2025-08-18;SAS;Feedex;SERWIS;;;2x c72 na ładowanie;2026-01-30T11:15:31
+79;2025-08-13;Tauron Bielsko Biała;Poczta Polska;SERWIS;;;Samsung A54 z niedziałającymi kartami SIM;2026-01-30T11:15:31
+78;2025-08-11;Urovo;DHL;MAGAZYN;;;DT66 z otokiem, naklejoną folią;2026-01-30T11:15:31
+77;2025-08-11;Tauron opole;Poczta Polska;SERWIS;;;Samsung A54 z wypalonym złączem, ekranem, złączem ładowania;2026-01-30T11:15:31
+76;2025-08-11;Unito;DHL;MAGAZYN;;;Folie do C61 i p80;2026-01-30T11:15:31
+75;2025-08-04;Autopartner;DHL;MAGAZYN;;;C66 na serwis, rozlany wyświetlacz;2026-01-30T11:15:31
+73;2025-08-04;Haxon;InPost;WYPOŻYCZENIE;;;C66 z otokiem, zwrot | | C66RRH250310222 HC660DE250400158;2026-01-30T11:15:31
+74;2025-08-01;Autopartner;DHL;SERWIS;;;C66 na serwis HC6609E201101480;2026-01-30T11:15:31
+72;2025-07-21;Dew-Systems;InPost;WYPOŻYCZENIE;;;Zwrot C61 z rączka, otokiem i stacją.;2026-01-30T11:15:31
+71;2025-07-18;Schiessel;DHL;SERWIS;;;C61 na serwis - nie działa skaner SE4850;2026-01-30T11:15:31
+70;2025-07-16;Ingram;DHL;MAGAZYN;;;S24268523704729 1PCBL-DC-388A1-01 | | Stacja na 4 akumulatory TC5X, zaisilacz i przewód;2026-01-30T11:15:31
+69;2025-07-14;TPV;TNT;MAGAZYN;;;Zwrot Honeywell;2026-01-30T11:15:31
+68;2025-07-11;Autopartner;DHL;SERWIS;;;2x C66;2026-01-30T11:15:31
+67;2025-07-07;Autopartner;DHL;WYPOŻYCZENIE;;;Zwrot C66 z otokiem;2026-01-30T11:15:31
+66;2025-07-02;Autopartner;DHL;SERWIS;;;2x C66 - 1 na zbity wyświetlacz, drugi na niedzialajacy aparat;2026-01-30T11:15:31
+65;2025-06-17;Vemco;DHL;SERWIS;;;Workabout G4 - nie działa RFID;2026-01-30T11:15:31
+64;2025-06-17;Energooperator Kalisz;DHL;SERWIS;;;DT50 016 - nie działa złącze łądowania - Tomasz Lewandowski;2026-01-30T11:15:31
+63;2025-06-12;origin USA;Feedex;MAGAZYN;;;Klawiatury do WK4 50szt i 3 ekrany LCD z ramkami;2026-01-30T11:15:31
+59;2025-06-04;SAS;UPS;MAGAZYN;;;C66 na serwis;2026-01-30T11:15:31
+58;2025-06-04;Orlen SA;Feedex;MAGAZYN;;;Meferi ME74 wraz z akcesoriami;2026-01-30T11:15:31
+60;2025-06-02;Autopartner;DPD;SERWIS;;;2x C66 na serwis;2026-01-30T11:15:31
+57;2025-06-02;Codeo;UPS;MAGAZYN;;;Nowe 8 akumulatorów do Zebra TC520;2026-01-30T11:15:31
+62;2025-05-27;Energa Toruń;Poczta Polska;SERWIS;;;3x Dt50;2026-01-30T11:15:31
+61;2025-05-27;Shenzen;DHL;MAGAZYN;;;C61 MC21 i akcesoria;2026-01-30T11:15:31
+56;2025-05-23;CODEO;Feedex;MAGAZYN;;;Zebry TC52 pod apart;2026-01-30T11:15:31
+55;2025-05-20;Nadleśnictwo Świdnik;DPD;SERWIS;;;Sewoo LK-P43;2026-01-30T11:15:31
+54;2025-05-15;Vemco;DHL;SERWIS;;;Workabout G4 Short WPSACE500268C2;2026-01-30T11:15:31
+53;2025-05-13;AJH;InPost;MAGAZYN;;;workabout g2 na zwrot;2026-01-30T11:15:31
+52;2025-05-09;Autopartner;DPD;SERWIS;;;C66 na wymianę szkiełka;2026-01-30T11:15:31
+51;2025-05-09;Energooperator Kalisz;DPD;SERWIS;;;2x DT50 na aktualizacje systemu;2026-01-30T11:15:31
+50;2025-05-09;M3 Mobile;DPD;MAGAZYN;;;US20, CRD, TRG | US300D - 3 urzadzenia | US20;2026-01-30T11:15:31
+49;2025-05-06;Vemco;DHL;SERWIS;;;Workabout G4 short na wymianę obudowy.;2026-01-30T11:15:31
+48;2025-04-28;Pulster;DHL;MAGAZYN;;;10 rysików do endcapow i 10 rysik chowanych;2026-01-30T11:15:31
+47;2025-04-23;Mikromera;DHL;SERWIS;;;2x c61 A11 i rączka C61 - wszystko starego typu.;2026-01-30T11:15:31
+45;2025-04-17;Arh informatyka;DHL;MAGAZYN;;;Kamera do rejestracji wraz z przewodem do wgrywania upgradeów.;2026-01-30T11:15:31
+44;2025-04-17;Ingram;DHL;MAGAZYN;JJD000030141271000003605801;;Zasilacz do Zebry;2026-01-30T11:15:31
+46;2025-04-14;MEFERI;UPS;MAGAZYN;;;ME74 z klatwiaturą pod orlen;2026-01-30T11:15:31
+43;2025-04-14;CODEO;Feedex;MAGAZYN;;;Zebra TC570HO-1x MU6 A6 na serwis;2026-01-30T11:15:31
+42;2025-04-10;EDZ;InPost;MAGAZYN;;;3 x ładowarka samochodowa;2026-01-30T11:15:31
+41;2025-04-02;Logistik Zentrum Verden;UPS;MAGAZYN;;;M3 Mobile z stacja i otokiem;2026-01-30T11:15:31
+40;2025-04-02;AJH;Feedex;MAGAZYN;;;Workabout G2 na wgranie Mobile. Zwrot omnii XT15;2026-01-30T11:15:31
+39;2025-04-02;Logic Synergy;Feedex;MAGAZYN;;;Zwrot RFID zestaw.;2026-01-30T11:15:31
+38;2025-04-02;TPV;Feedex;MAGAZYN;;;Honeywall na zwrot.;2026-01-30T11:15:31
+37;2025-03-31;Shenzen;DHL;MAGAZYN;;;5x ekran do Workabout G4;2026-01-30T11:15:31
+36;2025-03-31;Energaoperator Gdańsk;DHL;SERWIS;;;2 x DT50 - jedno na dotyk, drugie na zasięg;2026-01-30T11:15:31
+35;2025-03-27;Tauron Bielsko Biała;Poczta Polska;SERWIS;;;A54 na wymianę szkiełka.;2026-01-30T11:15:31
+34;2025-03-26;Autopartner;DHL;SERWIS;;;2 sztuki urządzen Chainway C66 na serwis. Jedno ze spalonym gniazdem, drugie na sam wyświetlacz.;2026-01-30T11:15:31
+33;2025-03-26;Autopartner;DHL;MAGAZYN;;;4x C72 | 3xC61 | MC51 i akcesoria | Akcesoria C72;2026-01-30T11:15:31
+32;2025-03-26;Deco-Sun;Feedex;SERWIS;;;Chainway C66 z rączką;2026-01-30T11:15:31
+29;2025-03-21;Logic Synergy;DPD;WYNAJEM;;;Workabout G4 na wymianę ekranu, dotyku;2026-01-30T11:15:31
+30;2025-03-20;Logic Synergy;DPD;SERWIS;;;Workabout G4 na naklejenie folii i wymianę dotyku;2026-01-30T11:15:31
+28;2025-03-20;Ferrodo;Osobiście;SERWIS;;;Dwa urządzenia C61 na zbity ekran przyniesione do serwisu. | | HC6109E210400249 | HC6109E201100026;2026-01-30T11:15:31
+26;2025-03-20;Shenzen;Feedex;MAGAZYN;;;Futerały dwa;2026-01-30T11:15:31
+24;2025-03-20;Loxy Poland;DPD;MAGAZYN;;;Zwrot P80 z otokiem i stacją wraz z zasilaczem;2026-01-30T11:15:31
+27;2025-03-19;MEFERI;UPS;MAGAZYN;;;Meferi 74 z rączką w zamian za meferi z rączka i kartonem oryginalnym.;2026-01-30T11:15:31
+25;2025-03-19;TPV;Feedex;MAGAZYN;;;Zwrot Zebry wraz z Honeywell calych zestawow, pistolet, stacje, urzadzenie i na reke urzadzenie;2026-01-30T11:15:31
+23;2025-03-17;Ingram;Feedex;WYPOŻYCZENIE;;;ME74 z stacją i paskiem, rączką, wypożyczenie;2026-01-30T11:15:31
+22;2025-03-14;Autopartner;DHL;WYNAJEM;;;C66 na serwis ekranu.;2026-01-30T11:15:31
+21;2025-03-13;Vanch;UPS;MAGAZYN;;;Antena rfid do przewodów pod zacisk;2026-01-30T11:15:31
+20;2025-03-13;MEFERI;InPost;MAGAZYN;;;ME74 + stacja ładowania + pistol grip | | DFE03246000383 | DEE01249000199 | MEK4CS125112000032;2026-01-30T11:15:31
+19;2025-03-12;Panmar;DHL;SERWIS;;;4 omnii XT15 na serwis. Dwa na laser, dwa na soft i płyte.;2026-01-30T11:15:31
+31;2025-03-11;AZT Soft;DHL;SERWIS;;;TC57 przyszło na serwis na zacinające się urzadzenie podczas używania. Urządzenie zacina się podczas ładowania i bez ładowania.;2026-01-30T11:15:31
+18;2025-03-10;Autopartner;DHL;SERWIS;;;C66 na serwis - wymiana wyświetlacza;2026-01-30T11:15:31
+17;2025-03-10;Autopartner;DHL;WYPOŻYCZENIE;;;Zwrot RFID Cp30, R6, Meferi, Mr20, C5;2026-01-30T11:15:31
+16;2025-03-03;Energooperator Kalisz;DHL;SERWIS;JJD000030090501000000021337;;Urovo DT50 - problem z głośnikiem;2026-01-30T11:15:31
+15;2025-03-03;Orlen S. A.;Feedex;SERWIS;6233421436781;;Urovo DT50 z nowej dostawy: 01992432005001;2026-01-30T11:15:31
+14;2025-02-24;Firstbit;TNT;WYPOŻYCZENIE;1100395335668012784002061369;;Zebry MC33 ze stacjami;2026-01-30T11:15:31
+13;2025-02-14;Autopartner;DHL;SERWIS;;;C66 A11;2026-01-30T11:15:31
+11;2025-02-11;Energa;InPost;SERWIS;;;Chainway C66;2026-01-30T11:15:31
+12;2025-02-03;Chainway;DHL;MAGAZYN;;;Uchwyt samochodowy;2026-01-30T11:15:31
+10;2025-02-03;Vemco;DHL;SERWIS;;;Workabout G4;2026-01-30T11:15:31
+9;2025-01-31;ZP Serwis;DPD;MAGAZYN;;;MC33 i cały zestaw urządzeń Zebra;2026-01-30T11:15:31
+8;2025-01-30;M2T;UPS;MAGAZYN;;;Bixolon R210;2026-01-30T11:15:31
+7;2025-01-30;SAS;UPS;WYNAJEM;;;C72 - wymiana akumulatora;2026-01-30T11:15:31
+6;2025-01-28;MEFERI;InPost;MAGAZYN;;;Meferi 12 i 74;2026-01-30T11:15:31
+5;2025-01-28;RWiK Białogard;DPD;SERWIS;;;Workabout G4;2026-01-30T11:15:31
+4;2025-01-27;Autopartner;DHL;SERWIS;;;Chainway C66 A9;2026-01-30T11:15:31
+3;2025-01-23;Shenzen;UPS;MAGAZYN;;;Uchwyty mountain grip do samochodu (3 plastikowe i 3 metalowe);2026-01-30T11:15:31
+2;2025-01-22;ZP Serwis;DPD;WYPOŻYCZENIE;;;TC53E - wypożyczenie bez akcesoriów;2026-01-30T11:15:31

@@ -12,6 +12,7 @@ import logging
 import os
 import sys
 import traceback
+import threading
 from logging.handlers import RotatingFileHandler
 from typing import Optional, Callable
 
@@ -53,11 +54,51 @@ def get_logger(name: str = "magazyn") -> logging.Logger:
     return logger
 
 
+
+
+def install_thread_excepthook() -> None:
+    """Loguje nieobsłużone wyjątki z wątków (Python 3.8+)."""
+    if not hasattr(threading, "excepthook"):
+        return
+
+    logger = get_logger("magazyn")
+    install_thread_excepthook()
+    install_qt_message_handler()
+
+    def _thread_hook(args):
+        try:
+            logger.error(
+                "Unhandled thread exception in %s",
+                getattr(args.thread, "name", "unknown"),
+                exc_info=(args.exc_type, args.exc_value, args.exc_traceback),
+            )
+        except Exception:
+            pass
+
+    threading.excepthook = _thread_hook
+
+
+def install_qt_message_handler() -> None:
+    """Przekierowuje komunikaty Qt do loga aplikacji."""
+    from PySide6.QtCore import qInstallMessageHandler
+
+    logger = get_logger("magazyn.qt")
+
+    def _qt_handler(mode, context, message):
+        try:
+            logger.warning("Qt message: %s", message)
+        except Exception:
+            pass
+
+    qInstallMessageHandler(_qt_handler)
+
 def install_excepthook(show_dialog: bool = True) -> None:
     """Instaluje globalny sys.excepthook, zapisuje stacktrace do loga.
     Jeśli show_dialog=True i PySide6 jest dostępny, pokaże QMessageBox.
     """
     logger = get_logger("magazyn")
+    install_thread_excepthook()
+    install_qt_message_handler()
 
     def _hook(exc_type, exc, tb):
         try:

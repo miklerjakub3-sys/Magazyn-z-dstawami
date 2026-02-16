@@ -16,6 +16,7 @@ from PySide6.QtWidgets import (
     QFormLayout,
     QFrame,
     QHBoxLayout,
+    QLineEdit,
     QLabel,
     QListWidgetItem,
     QMessageBox,

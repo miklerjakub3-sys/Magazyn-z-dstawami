@@ -397,18 +397,22 @@ class ReceiptsTab(QWidget):
 
     def apply_mode(self) -> None:
         is_accessory = self.in_mode.currentText() == "Akcesorium"
-        self.in_name.setEnabled(not is_accessory)
+        # Nazwę dla akcesorium można nadpisać ręcznie, ale domyślnie podpowiadamy.
+        self.in_name.setEnabled(True)
         self.in_imei1.setEnabled(not is_accessory)
         self.in_imei2.setEnabled(not is_accessory)
         self.in_prod.setEnabled(not is_accessory)
+        if is_accessory:
+            self.in_name.setPlaceholderText("np. Ładowarka, Kabel USB-C")
+            if not self.in_name.text().strip():
+                self.in_name.setText("Akcesorium")
+        else:
+            self.in_name.setPlaceholderText("")
 
     def _focus_scan_start(self):
-        if self.chk_scan.isChecked():
-            self.in_name.setFocus()
-            self.in_name.selectAll()
-        else:
-            self.in_name.setFocus()
-            self.in_name.selectAll()
+        target = self.in_sn if self.in_mode.currentText() == "Akcesorium" else self.in_name
+        target.setFocus()
+        target.selectAll()
 
     def _scan_next(self) -> None:
         if self.chk_cont.isChecked():
@@ -517,6 +521,15 @@ class ReceiptsTab(QWidget):
         dup_imei = {k for k, v in imei_count.items() if k and v > 1}
         return dup_sn, dup_imei
 
+    def _resolve_accessory_name(self, serial: str) -> str:
+        base = self.in_name.text().strip()
+        if base:
+            return base
+        serial = (serial or "").strip()
+        if serial:
+            return f"Akcesorium {serial[:12]}"
+        return "Akcesorium"
+
     def on_add(self) -> None:
         try:
             date_text = self.in_date.date().toString("yyyy-MM-dd")
@@ -537,11 +550,16 @@ class ReceiptsTab(QWidget):
                 ):
                     return
 
+            serial = self.in_sn.text().strip()
+            device_name = self.in_name.text().strip()
+            if item_type == "accessory":
+                device_name = self._resolve_accessory_name(serial)
+
             self.svc.add_device(
                 received_date=date_text,
                 item_type=item_type,
-                device_name=self.in_name.text().strip(),
-                serial_number=self.in_sn.text().strip(),
+                device_name=device_name,
+                serial_number=serial,
                 imei1=self.in_imei1.text().strip(),
                 imei2=self.in_imei2.text().strip(),
                 production_code=self.in_prod.text().strip(),

@@ -1,33 +1,39 @@
-# magazyn/ui/splash.py
 from __future__ import annotations
 
 import os
 import sys
-from typing import Optional
+from pathlib import Path
 
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QPixmap, QPainter, QFont, QColor
+from PySide6.QtGui import QColor, QFont, QPainter, QPixmap
 from PySide6.QtWidgets import QSplashScreen
 
 
-def _resource_path(rel_path: str) -> str:
-    """
-    Zwraca ścieżkę do zasobów zarówno w trybie dev, jak i w PyInstaller (onefile).
-    """
+def _resource_candidates(rel_path: str) -> list[str]:
+    candidates: list[str] = []
     if hasattr(sys, "_MEIPASS"):
-        base = getattr(sys, "_MEIPASS")  # type: ignore[attr-defined]
-        return os.path.join(base, rel_path)
-    # dev: plik jest w magazyn/ui/splash.py -> cofamy się do magazyn/ui
-    here = os.path.dirname(__file__)
-    return os.path.join(here, rel_path)
+        base = Path(getattr(sys, "_MEIPASS"))  # type: ignore[attr-defined]
+        candidates.append(str(base / rel_path))
+        candidates.append(str(base / "magazyn" / "ui" / rel_path))
+
+    here = Path(__file__).resolve().parent
+    candidates.append(str(here / rel_path))
+    candidates.append(str(here / "assets" / "axedserwis.png"))
+    return candidates
+
+
+def _resolve_logo_path(default_rel: str) -> str:
+    for p in _resource_candidates(default_rel):
+        if os.path.exists(p):
+            return p
+    return ""
 
 
 def make_splash(
     title: str = "Magazyn z dostawami",
     subtitle: str = "Uruchamianie…",
-    logo_rel_path=os.path.join("assets","axedserwis.png")
+    logo_rel_path: str = os.path.join("assets", "axedserwis.png"),
 ) -> QSplashScreen:
-    # rozmiar splash (dopasuj jeśli chcesz)
     w, h = 560, 260
 
     pm = QPixmap(w, h)
@@ -35,22 +41,18 @@ def make_splash(
     painter = QPainter(pm)
     painter.setRenderHint(QPainter.Antialiasing)
 
-    # --- logo
-    logo_path = _resource_path(logo_rel_path)
-    logo = QPixmap(logo_path)
+    logo_path = _resolve_logo_path(logo_rel_path)
+    logo = QPixmap(logo_path) if logo_path else QPixmap()
     if not logo.isNull():
-        target_h = 90
-        scaled = logo.scaledToHeight(target_h, Qt.SmoothTransformation)
+        scaled = logo.scaledToHeight(90, Qt.SmoothTransformation)
         painter.drawPixmap(30, 35, scaled)
 
-    # --- tytuł
     painter.setPen(QColor("#424242"))
     f = QFont("Segoe UI", 22)
     f.setBold(True)
     painter.setFont(f)
     painter.drawText(30, 165, title)
 
-    # --- podtytuł
     painter.setPen(QColor("#424242"))
     painter.setFont(QFont("Segoe UI", 11))
     painter.drawText(30, 195, subtitle)
@@ -61,4 +63,3 @@ def make_splash(
     splash.setWindowFlag(Qt.WindowStaysOnTopHint, True)
     splash.setMask(pm.mask())
     return splash
-    print("LOGO PATH:", logo_path, "exists:", os.path.exists(logo_path))

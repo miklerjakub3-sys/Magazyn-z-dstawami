@@ -251,8 +251,11 @@ class DeliveriesTab(QWidget):
         self.btn_next.clicked.connect(lambda: self._goto(min(self.total_pages - 1, self.page + 1)))
         self.btn_last.clicked.connect(lambda: self._goto(max(0, self.total_pages - 1)))
 
+        main_split = QSplitter(Qt.Vertical)
+        root.addWidget(main_split, 1)
+
         split = QSplitter(Qt.Horizontal)
-        root.addWidget(split, 1)
+        main_split.addWidget(split)
 
         left = QWidget()
         left_l = QVBoxLayout(left)
@@ -292,7 +295,8 @@ class DeliveriesTab(QWidget):
         form_card.setProperty("card", True)
         form_row = QHBoxLayout(form_card)
         form_row.setContentsMargins(12, 10, 12, 10)
-        root.addWidget(form_card)
+        main_split.addWidget(form_card)
+        main_split.setSizes([760, 220])
 
         form = QFormLayout()
         form_row.addLayout(form, stretch=2)

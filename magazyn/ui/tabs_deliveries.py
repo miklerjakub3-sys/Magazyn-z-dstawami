@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from typing import List, Any, Optional, Sequence
 import os
-from PySide6.QtWidgets import QListWidgetItem
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QKeySequence, QShortcut
 from PySide6.QtWidgets import (
@@ -12,12 +11,12 @@ from PySide6.QtWidgets import (
     QLineEdit, QPushButton, QComboBox, QMessageBox, QTableWidget, QLabel, QCheckBox, QFileDialog,
     QListWidget, QListWidgetItem, QSplitter, QDialog
 )
-from magazyn.config import DELIVERY_TYPES, ITEM_TYPE_TO_LABEL
 from ..config import MAX_RESULTS_PER_PAGE, DELIVERY_TYPES, ITEM_TYPE_TO_LABEL
 from ..services import MagazynService
 from ..utils import today_str, validate_ymd, one_line
 from ..log import get_logger
 from .widgets import fill_table
+from .attachments_widget import AttachmentGalleryWidget
 from PySide6.QtWidgets import QDateEdit
 from PySide6.QtCore import QDate
 
@@ -195,6 +194,8 @@ class DeliveriesTab(QWidget):
         self.page = 0
         self.total_pages = 1
         self.total = 0
+        self.sort_col = 1
+        self.sort_dir = Qt.DescendingOrder
         self._build()
         self._install_shortcuts()
         self.refresh_lists()
@@ -242,6 +243,8 @@ class DeliveriesTab(QWidget):
         self.table = QTableWidget()
         self.table.setSelectionBehavior(QTableWidget.SelectRows)
         self.table.setSelectionMode(QTableWidget.SingleSelection)
+        self.table.setSortingEnabled(True)
+        self.table.setAlternatingRowColors(True)
         left_l.addWidget(self.table, 1)
         split.addWidget(left)
 
@@ -253,22 +256,17 @@ class DeliveriesTab(QWidget):
         self.tbl_linked = QTableWidget()
         self.tbl_linked.setSelectionBehavior(QTableWidget.SelectRows)
         self.tbl_linked.setSelectionMode(QTableWidget.ExtendedSelection)
+        self.tbl_linked.setAlternatingRowColors(True)
         right_l.addWidget(self.tbl_linked, 1)
 
-        # attachments panel
+        # attachments panel (thumbnail gallery)
         right_l.addWidget(QLabel("Zdjęcia dostawy:"))
-        self.list_att = QListWidget()
-        right_l.addWidget(self.list_att, 1)
-
-        att_btns = QHBoxLayout()
-        right_l.addLayout(att_btns)
-        self.btn_attach = QPushButton("Dodaj zdjęcia…")
-        self.btn_del_att = QPushButton("Usuń zdjęcie")
-        self.btn_open_att = QPushButton("Podgląd")
-        att_btns.addWidget(self.btn_attach)
-        att_btns.addWidget(self.btn_open_att)
-        att_btns.addWidget(self.btn_del_att)
-        att_btns.addStretch(1)
+        self.attachments = AttachmentGalleryWidget()
+        self.list_att = self.attachments.list_widget
+        self.btn_attach = self.attachments.btn_add
+        self.btn_open_att = self.attachments.btn_preview
+        self.btn_del_att = self.attachments.btn_remove
+        right_l.addWidget(self.attachments, 1)
 
         split.addWidget(right)
         split.setSizes([800, 600])
@@ -300,8 +298,11 @@ class DeliveriesTab(QWidget):
         btns = QVBoxLayout()
         form_row.addLayout(btns, stretch=1)
         self.btn_add = QPushButton("Dodaj")
+        self.btn_add.setProperty("role", "primary")
         self.btn_save = QPushButton("Zapisz")
+        self.btn_save.setProperty("role", "secondary")
         self.btn_del = QPushButton("Usuń")
+        self.btn_del.setProperty("role", "danger")
         self.btn_link = QPushButton("Powiąż przyjęcia…")
         self.btn_clear_form = QPushButton("Wyczyść formularz")
         btns.addWidget(self.btn_add)
@@ -322,10 +323,25 @@ class DeliveriesTab(QWidget):
         self.btn_open_att.clicked.connect(self.on_open_attachment)
 
         self.table.itemSelectionChanged.connect(self.load_selected)
+        self.table.itemSelectionChanged.connect(self._update_context_actions)
+        self.table.horizontalHeader().sectionClicked.connect(self.on_header_sort_clicked)
         self.list_att.itemDoubleClicked.connect(lambda _: self.on_open_attachment())
+        self.list_att.itemSelectionChanged.connect(self._update_context_actions)
+        self._update_context_actions()
 
     def _install_shortcuts(self):
         QShortcut(QKeySequence("Delete"), self, self.on_delete)
+
+    def _update_context_actions(self) -> None:
+        has_delivery = self._selected_delivery_id() is not None
+        self.btn_link.setVisible(has_delivery)
+        self.btn_save.setEnabled(has_delivery)
+        self.btn_del.setEnabled(has_delivery)
+        self.btn_attach.setEnabled(has_delivery)
+
+        has_att = self.list_att.currentItem() is not None
+        self.btn_open_att.setEnabled(has_att)
+        self.btn_del_att.setEnabled(has_att)
 
     def refresh_lists(self) -> None:
         try:
@@ -355,6 +371,15 @@ class DeliveriesTab(QWidget):
 
     def on_clear(self) -> None:
         self.f_from.clear(); self.f_to.clear(); self.f_type.setCurrentText("")
+        self.page = 0
+        self.refresh()
+
+    def on_header_sort_clicked(self, col: int) -> None:
+        if self.sort_col == col:
+            self.sort_dir = Qt.AscendingOrder if self.sort_dir == Qt.DescendingOrder else Qt.DescendingOrder
+        else:
+            self.sort_col = col
+            self.sort_dir = Qt.AscendingOrder
         self.page = 0
         self.refresh()
 
@@ -390,6 +415,18 @@ class DeliveriesTab(QWidget):
                 date_from=df,
                 date_to=dt,
                 delivery_type=self.f_type.currentText().strip(),
+                order_by={
+                    0: "id",
+                    1: "delivery_date",
+                    2: "sender_name",
+                    3: "courier_name",
+                    4: "delivery_type",
+                    5: "tracking_number",
+                    6: "invoice_vat",
+                    7: "notes",
+                    8: "created_at",
+                }.get(self.sort_col, "delivery_date"),
+                order_dir="ASC" if self.sort_dir == Qt.AscendingOrder else "DESC",
                 limit=MAX_RESULTS_PER_PAGE,
                 offset=offset,
             )
@@ -403,9 +440,22 @@ class DeliveriesTab(QWidget):
                 vat = "TAK" if int(r[6] or 0) == 1 else "NIE"
                 rows.append([r[0], r[1], r[2] or "", r[3] or "", r[4] or "", r[5] or "", vat, one_line(r[7] or ""), r[8] or ""])
             fill_table(self.table, headers, rows)
+            self.table.horizontalHeader().setSortIndicator(self.sort_col, self.sort_dir)
+            for i, r in enumerate(pr.rows):
+                typ = (r[4] or "").upper()
+                it = self.table.item(i, 4)
+                if not it:
+                    continue
+                if typ == "MAGAZYN":
+                    it.setBackground(Qt.GlobalColor.green)
+                elif typ == "SERWIS":
+                    it.setBackground(Qt.GlobalColor.yellow)
+                elif typ in ("WYNAJEM", "WYPOŻYCZENIE"):
+                    it.setBackground(Qt.GlobalColor.cyan)
 
             # after refresh, load selected
             self.load_selected()
+            self._update_context_actions()
         except Exception as e:
             log.exception("refresh deliveries")
             QMessageBox.critical(self, "Błąd", str(e))
@@ -416,6 +466,7 @@ class DeliveriesTab(QWidget):
         self.list_att.clear()
         fill_table(self.tbl_linked, ["ID","Typ","Nazwa","SN/Kod","IMEI1","IMEI2","Kod prod.","Uwagi"], [])
         if not did:
+            self._update_context_actions()
             return
         try:
             row = self.svc.get_delivery(did)
@@ -470,6 +521,7 @@ class DeliveriesTab(QWidget):
                 it.setData(Qt.UserRole, (att_id, path))
                 self.list_att.addItem(it)
 
+            self._update_context_actions()
         except Exception:
             log.exception("load selected")
 
@@ -560,10 +612,12 @@ class DeliveriesTab(QWidget):
         if errors:
             QMessageBox.warning(self, "Uwaga", "\n".join(errors[:8]))
         self.load_selected()
+        self._update_context_actions()
 
     def on_delete_attachment(self):
         did = self._selected_delivery_id()
         if not did:
+            self._update_context_actions()
             return
         item = self.list_att.currentItem()
         if not item:
@@ -575,6 +629,7 @@ class DeliveriesTab(QWidget):
         try:
             self.svc.delete_delivery_attachment(int(att_id), delete_file=True)
             self.load_selected()
+            self._update_context_actions()
         except Exception as e:
             log.exception("delete attachment")
             QMessageBox.critical(self, "Błąd", str(e))
@@ -608,7 +663,7 @@ class DeliveriesTab(QWidget):
             rows_out: List[List[str]] = []
             offset = 0
             while True:
-                pr = self.svc.search_deliveries(df, dt, "", "", dtype, 1000, offset)
+                pr = self.svc.search_deliveries(date_from=df, date_to=dt, sender="", courier="", delivery_type=dtype, limit=1000, offset=offset)
                 if not pr.rows:
                     break
                 for r in pr.rows:

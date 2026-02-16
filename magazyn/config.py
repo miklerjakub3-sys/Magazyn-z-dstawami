@@ -32,7 +32,7 @@ MAX_RESULTS_PER_PAGE = 100
 # ======================
 # Backup
 # ======================
-AUTO_BACKUP_INTERVAL = 3600  # 1 godzina (sekundy)
+AUTO_BACKUP_INTERVAL = 1800  # 30 minut (sekundy)
 
 # ======================
 # Typy pozycji (PRZYJĘCIA)

@@ -235,6 +235,8 @@ class ReceiptsTab(QWidget):
         self.page = 0
         self.total_pages = 1
         self.total = 0
+        self.sort_col = 1
+        self.sort_dir = Qt.DescendingOrder
 
         self._build()
         self._install_shortcuts()
@@ -282,11 +284,15 @@ class ReceiptsTab(QWidget):
         top.addLayout(btns, stretch=2)
 
         self.btn_add = QPushButton("Dodaj")
+        self.btn_add.setProperty("role", "primary")
         self.btn_edit = QPushButton("Edytuj")
+        self.btn_edit.setProperty("role", "secondary")
         self.btn_del = QPushButton("Usuń")
+        self.btn_del.setProperty("role", "danger")
         self.btn_import = QPushButton("Import…")
         self.btn_export = QPushButton("Eksport CSV…")
         self.btn_copy = QPushButton("Kopiuj SN")
+        self.btn_clear_form = QPushButton("Wyczyść formularz")
 
         btns.addWidget(self.btn_add)
         btns.addWidget(self.btn_edit)
@@ -294,6 +300,7 @@ class ReceiptsTab(QWidget):
         btns.addWidget(self.btn_import)
         btns.addWidget(self.btn_export)
         btns.addWidget(self.btn_copy)
+        btns.addWidget(self.btn_clear_form)
         btns.addStretch(1)
 
         self.btn_add.clicked.connect(self.on_add)
@@ -302,6 +309,7 @@ class ReceiptsTab(QWidget):
         self.btn_import.clicked.connect(self.on_open_import)
         self.btn_export.clicked.connect(self.on_export_csv)
         self.btn_copy.clicked.connect(self.copy_selected_sn)
+        self.btn_clear_form.clicked.connect(self.clear_form)
 
         self.in_mode.currentTextChanged.connect(self.apply_mode)
 
@@ -337,9 +345,12 @@ class ReceiptsTab(QWidget):
         self.table = QTableWidget()
         self.table.setSelectionBehavior(QTableWidget.SelectRows)
         self.table.setSelectionMode(QTableWidget.ExtendedSelection)
+        self.table.setSortingEnabled(True)
+        self.table.setAlternatingRowColors(True)
         root.addWidget(self.table, stretch=1)
 
         self.table.cellDoubleClicked.connect(lambda r, c: self.on_edit())
+        self.table.horizontalHeader().sectionClicked.connect(self.on_header_sort_clicked)
 
         # --- Paging
         paging_row = QHBoxLayout()
@@ -640,6 +651,26 @@ class ReceiptsTab(QWidget):
         self.page = 0
         self.refresh()
 
+    def clear_form(self) -> None:
+        self.in_date.setText(today_str())
+        self.in_mode.setCurrentText("Urządzenie")
+        self.in_name.clear()
+        self.in_sn.clear()
+        self.in_imei1.clear()
+        self.in_imei2.clear()
+        self.in_prod.clear()
+        self.apply_mode()
+        self._focus_scan_start()
+
+    def on_header_sort_clicked(self, col: int) -> None:
+        if self.sort_col == col:
+            self.sort_dir = Qt.AscendingOrder if self.sort_dir == Qt.DescendingOrder else Qt.DescendingOrder
+        else:
+            self.sort_col = col
+            self.sort_dir = Qt.AscendingOrder
+        self.page = 0
+        self.refresh()
+
     def on_clear(self) -> None:
         self.search.clear()
         self.filter_type.setCurrentText("Wszystkie")
@@ -658,8 +689,20 @@ class ReceiptsTab(QWidget):
             pr = self.svc.search_devices(
                 query=self.search.text(),
                 item_type=item_type,
-                order_by="received_date",
-                order_dir="DESC",
+                order_by={
+                    0: "id",
+                    1: "received_date",
+                    2: "item_type",
+                    3: "device_name",
+                    4: "serial_number",
+                    5: "imei1",
+                    6: "imei2",
+                    7: "production_code",
+                    8: "delivery_id",
+                    9: "notes",
+                    10: "created_at",
+                }.get(self.sort_col, "received_date"),
+                order_dir="ASC" if self.sort_dir == Qt.AscendingOrder else "DESC",
                 limit=MAX_RESULTS_PER_PAGE,
                 offset=offset,
             )
@@ -679,8 +722,15 @@ class ReceiptsTab(QWidget):
                 rows.append([rr[0], rr[1], rr[2], rr[3], rr[4], rr[5], rr[6], rr[7], rr[8], rr[9], rr[10]])
 
             fill_table(self.table, headers, rows)
+            self.table.horizontalHeader().setSortIndicator(self.sort_col, self.sort_dir)
 
             for i, r in enumerate(pr.rows):
+                type_item = self.table.item(i, 2)
+                if type_item:
+                    if r[2] == "device":
+                        type_item.setBackground(QColor("#e0f2fe"))
+                    else:
+                        type_item.setBackground(QColor("#fef3c7"))
                 item_type_raw = r[2]
                 has_notes = bool((r[8] or "").strip())
                 missing_imei = (item_type_raw == "device" and not (r[5] or "").strip())

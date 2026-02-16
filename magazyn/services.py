@@ -88,10 +88,22 @@ class MagazynService:
         sender: str = "",
         courier: str = "",
         delivery_type: str = "",
+        order_by: str = "delivery_date",
+        order_dir: str = "DESC",
         limit: int = 100,
         offset: int = 0,
     ) -> PagedResult:
-        rows, total = database.search_deliveries(date_from, date_to, sender, courier, delivery_type, limit, offset)
+        rows, total = database.search_deliveries(
+            date_from,
+            date_to,
+            sender,
+            courier,
+            delivery_type,
+            order_by,
+            order_dir,
+            limit,
+            offset,
+        )
         return PagedResult(list(rows), int(total))
 
     def add_delivery(self, *args, **kwargs) -> int:

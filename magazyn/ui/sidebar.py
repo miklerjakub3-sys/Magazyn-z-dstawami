@@ -21,13 +21,15 @@ class SidebarNav(QFrame):
         root.setContentsMargins(12, 14, 12, 14)
         root.setSpacing(8)
 
-        logo = QLabel("📦  MAGAZYN")
-        logo.setProperty("title", True)
-        logo.setStyleSheet(
+        # Trzymamy referencję pod jednoznaczną nazwą, żeby uniknąć literówek typu
+        # `logo`/`logos` podczas ręcznych merge'y i edycji.
+        logo_label = QLabel("📦  MAGAZYN")
+        logo_label.setProperty("title", True)
+        logo_label.setStyleSheet(
             "color: #ffffff; font-size: 18px; font-weight: 700; "
             "background: #1d4ed8; border-radius: 8px; padding: 8px;"
         )
-        root.addWidget(logo)
+        root.addWidget(logo_label)
 
         for key, text in [
             ("dashboard", "🏠  Pulpit"),

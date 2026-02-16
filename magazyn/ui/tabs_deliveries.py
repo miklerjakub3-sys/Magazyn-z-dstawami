@@ -195,6 +195,8 @@ class DeliveriesTab(QWidget):
         self.page = 0
         self.total_pages = 1
         self.total = 0
+        self.sort_col = 1
+        self.sort_dir = Qt.DescendingOrder
         self._build()
         self._install_shortcuts()
         self.refresh_lists()
@@ -242,6 +244,7 @@ class DeliveriesTab(QWidget):
         self.table = QTableWidget()
         self.table.setSelectionBehavior(QTableWidget.SelectRows)
         self.table.setSelectionMode(QTableWidget.SingleSelection)
+        self.table.setSortingEnabled(True)
         left_l.addWidget(self.table, 1)
         split.addWidget(left)
 
@@ -322,6 +325,7 @@ class DeliveriesTab(QWidget):
         self.btn_open_att.clicked.connect(self.on_open_attachment)
 
         self.table.itemSelectionChanged.connect(self.load_selected)
+        self.table.horizontalHeader().sectionClicked.connect(self.on_header_sort_clicked)
         self.list_att.itemDoubleClicked.connect(lambda _: self.on_open_attachment())
 
     def _install_shortcuts(self):
@@ -358,6 +362,15 @@ class DeliveriesTab(QWidget):
         self.page = 0
         self.refresh()
 
+    def on_header_sort_clicked(self, col: int) -> None:
+        if self.sort_col == col:
+            self.sort_dir = Qt.AscendingOrder if self.sort_dir == Qt.DescendingOrder else Qt.DescendingOrder
+        else:
+            self.sort_col = col
+            self.sort_dir = Qt.AscendingOrder
+        self.page = 0
+        self.refresh()
+
     def clear_form(self):
         """Czyści formularz dostawy (bez usuwania z bazy)"""
         self.in_date.setText(today_str())
@@ -390,6 +403,18 @@ class DeliveriesTab(QWidget):
                 date_from=df,
                 date_to=dt,
                 delivery_type=self.f_type.currentText().strip(),
+                order_by={
+                    0: "id",
+                    1: "delivery_date",
+                    2: "sender_name",
+                    3: "courier_name",
+                    4: "delivery_type",
+                    5: "tracking_number",
+                    6: "invoice_vat",
+                    7: "notes",
+                    8: "created_at",
+                }.get(self.sort_col, "delivery_date"),
+                order_dir="ASC" if self.sort_dir == Qt.AscendingOrder else "DESC",
                 limit=MAX_RESULTS_PER_PAGE,
                 offset=offset,
             )
@@ -403,6 +428,7 @@ class DeliveriesTab(QWidget):
                 vat = "TAK" if int(r[6] or 0) == 1 else "NIE"
                 rows.append([r[0], r[1], r[2] or "", r[3] or "", r[4] or "", r[5] or "", vat, one_line(r[7] or ""), r[8] or ""])
             fill_table(self.table, headers, rows)
+            self.table.horizontalHeader().setSortIndicator(self.sort_col, self.sort_dir)
 
             # after refresh, load selected
             self.load_selected()
@@ -608,7 +634,7 @@ class DeliveriesTab(QWidget):
             rows_out: List[List[str]] = []
             offset = 0
             while True:
-                pr = self.svc.search_deliveries(df, dt, "", "", dtype, 1000, offset)
+                pr = self.svc.search_deliveries(date_from=df, date_to=dt, sender="", courier="", delivery_type=dtype, limit=1000, offset=offset)
                 if not pr.rows:
                     break
                 for r in pr.rows:

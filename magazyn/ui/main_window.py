@@ -64,9 +64,9 @@ class MainWindow(QMainWindow):
         header.setProperty("card", True)
         header_l = QVBoxLayout(header)
         header_l.setContentsMargins(16, 12, 16, 12)
-        self.lbl_title = QLabel("Dashboard")
+        self.lbl_title = QLabel("Pulpit")
         self.lbl_title.setProperty("title", True)
-        self.lbl_breadcrumbs = QLabel("Start / Dashboard")
+        self.lbl_breadcrumbs = QLabel("Start / Pulpit")
         self.lbl_breadcrumbs.setProperty("subtitle", True)
         header_l.addWidget(self.lbl_title)
         header_l.addWidget(self.lbl_breadcrumbs)
@@ -74,7 +74,7 @@ class MainWindow(QMainWindow):
 
         self.stack = QStackedWidget()
         self.pages = {
-            "dashboard": DashboardPage(),
+            "dashboard": DashboardPage(self.svc),
             "receipts": ReceiptsTab(self.svc),
             "deliveries": DeliveriesTab(self.svc),
             "reports": ReportsTab(self.svc),
@@ -96,7 +96,7 @@ class MainWindow(QMainWindow):
 
     def show_page(self, key: str) -> None:
         titles = {
-            "dashboard": "Dashboard",
+            "dashboard": "Pulpit",
             "receipts": "Przyjęcia",
             "deliveries": "Dostawy",
             "reports": "Raporty",

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Sequence
 
-from PySide6.QtCore import Qt, QTimer
+from PySide6.QtCore import QDate, Qt, QTimer
 from PySide6.QtGui import QKeySequence, QShortcut, QColor, QGuiApplication
 from PySide6.QtWidgets import (
     QWidget,
@@ -21,6 +21,7 @@ from PySide6.QtWidgets import (
     QFileDialog,
     QDialog,
     QTextEdit,
+    QDateEdit,
 )
 
 from ..config import MAX_RESULTS_PER_PAGE, ITEM_TYPE_TO_LABEL
@@ -155,7 +156,9 @@ class EditDeviceDialog(QDialog):
         form = QFormLayout()
         root.addLayout(form)
 
-        self.in_date = QLineEdit()
+        self.in_date = QDateEdit()
+        self.in_date.setCalendarPopup(True)
+        self.in_date.setDisplayFormat("yyyy-MM-dd")
         self.in_type = QComboBox()
         self.in_type.addItems(["Urządzenie", "Akcesorium"])
         self.in_name = QLineEdit()
@@ -165,7 +168,7 @@ class EditDeviceDialog(QDialog):
         self.in_prod = QLineEdit()
         self.in_notes = QLineEdit()
 
-        form.addRow("Data (YYYY-MM-DD)", self.in_date)
+        form.addRow("Data", self.in_date)
         form.addRow("Typ", self.in_type)
         form.addRow("Nazwa", self.in_name)
         form.addRow("SN/Kod", self.in_sn)
@@ -194,7 +197,7 @@ class EditDeviceDialog(QDialog):
             self.close()
             return
 
-        self.in_date.setText(row[1] or "")
+        self.in_date.setDate(QDate.fromString(row[1], "yyyy-MM-dd") if row[1] else QDate.currentDate())
         self.in_type.setCurrentText("Urządzenie" if row[2] == "device" else "Akcesorium")
         self.in_name.setText(row[3] or "")
         self.in_sn.setText(row[4] or "")
@@ -205,12 +208,13 @@ class EditDeviceDialog(QDialog):
 
     def save(self) -> None:
         try:
-            validate_ymd(self.in_date.text().strip())
+            date_text = self.in_date.date().toString("yyyy-MM-dd")
+            validate_ymd(date_text)
             item_type = "device" if self.in_type.currentText() == "Urządzenie" else "accessory"
 
             self.svc.update_device(
                 device_id=self.device_id,
-                received_date=self.in_date.text().strip(),
+                received_date=date_text,
                 item_type=item_type,
                 device_name=self.in_name.text().strip(),
                 serial_number=self.in_sn.text().strip(),
@@ -254,7 +258,10 @@ class ReceiptsTab(QWidget):
         form = QFormLayout()
         top.addLayout(form, stretch=4)
 
-        self.in_date = QLineEdit(today_str())
+        self.in_date = QDateEdit()
+        self.in_date.setCalendarPopup(True)
+        self.in_date.setDisplayFormat("yyyy-MM-dd")
+        self.in_date.setDate(QDate.fromString(today_str(), "yyyy-MM-dd"))
         self.in_mode = QComboBox()
         self.in_mode.addItems(["Urządzenie", "Akcesorium"])
         self.in_name = QLineEdit()
@@ -263,7 +270,7 @@ class ReceiptsTab(QWidget):
         self.in_imei2 = QLineEdit()
         self.in_prod = QLineEdit()
 
-        form.addRow("Data (YYYY-MM-DD)", self.in_date)
+        form.addRow("Data", self.in_date)
         form.addRow("Typ", self.in_mode)
         form.addRow("Nazwa", self.in_name)
         form.addRow("SN/Kod", self.in_sn)
@@ -347,6 +354,7 @@ class ReceiptsTab(QWidget):
         self.table.setSelectionMode(QTableWidget.ExtendedSelection)
         self.table.setSortingEnabled(True)
         self.table.setAlternatingRowColors(True)
+        self.table.setMinimumHeight(460)
         root.addWidget(self.table, stretch=1)
 
         self.table.cellDoubleClicked.connect(lambda r, c: self.on_edit())
@@ -375,6 +383,11 @@ class ReceiptsTab(QWidget):
         self.btn_prev.clicked.connect(lambda: self._goto(max(0, self.page - 1)))
         self.btn_next.clicked.connect(lambda: self._goto(min(self.total_pages - 1, self.page + 1)))
         self.btn_last.clicked.connect(lambda: self._goto(max(0, self.total_pages - 1)))
+
+        root.setStretch(0, 0)
+        root.setStretch(1, 0)
+        root.setStretch(2, 5)
+        root.setStretch(3, 0)
 
         self.apply_mode()
 
@@ -506,7 +519,8 @@ class ReceiptsTab(QWidget):
 
     def on_add(self) -> None:
         try:
-            validate_ymd(self.in_date.text().strip())
+            date_text = self.in_date.date().toString("yyyy-MM-dd")
+            validate_ymd(date_text)
             item_type = "device" if self.in_mode.currentText() == "Urządzenie" else "accessory"
 
             dups = self.svc.find_device_duplicates(
@@ -524,7 +538,7 @@ class ReceiptsTab(QWidget):
                     return
 
             self.svc.add_device(
-                received_date=self.in_date.text().strip(),
+                received_date=date_text,
                 item_type=item_type,
                 device_name=self.in_name.text().strip(),
                 serial_number=self.in_sn.text().strip(),
@@ -652,7 +666,7 @@ class ReceiptsTab(QWidget):
         self.refresh()
 
     def clear_form(self) -> None:
-        self.in_date.setText(today_str())
+        self.in_date.setDate(QDate.fromString(today_str(), "yyyy-MM-dd"))
         self.in_mode.setCurrentText("Urządzenie")
         self.in_name.clear()
         self.in_sn.clear()

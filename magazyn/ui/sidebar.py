@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Dict
 
 from PySide6.QtCore import Signal
-from PySide6.QtWidgets import QFrame, QVBoxLayout, QPushButton, QLabel
+from PySide6.QtWidgets import QFrame, QLabel, QPushButton, QVBoxLayout
 
 
 class SidebarNav(QFrame):
@@ -21,13 +21,18 @@ class SidebarNav(QFrame):
         root.setContentsMargins(12, 14, 12, 14)
         root.setSpacing(8)
 
-        logo = QLabel("📦 Magazyn")
-        logo.setProperty("title", True)
-        logo.setStyleSheet("color: white; font-size: 18px;")
-        root.addWidget(logo)
+        # Trzymamy referencję pod jednoznaczną nazwą, żeby uniknąć literówek typu
+        # `logo`/`logos` podczas ręcznych merge'y i edycji.
+        logo_label = QLabel("📦  MAGAZYN")
+        logo_label.setProperty("title", True)
+        logo_label.setStyleSheet(
+            "color: #ffffff; font-size: 18px; font-weight: 700; "
+            "background: #1d4ed8; border-radius: 8px; padding: 8px;"
+        )
+        root.addWidget(logo_label)
 
         for key, text in [
-            ("dashboard", "🏠  Dashboard"),
+            ("dashboard", "🏠  Pulpit"),
             ("receipts", "📥  Przyjęcia"),
             ("deliveries", "🚚  Dostawy"),
             ("reports", "📄  Raporty"),

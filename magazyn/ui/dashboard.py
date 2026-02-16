@@ -27,6 +27,10 @@ class DashboardPage(QWidget):
         title.setProperty("title", True)
         root.addWidget(title)
 
+        self.lbl_stats = QLabel("")
+        self.lbl_stats.setProperty("subtitle", True)
+        root.addWidget(self.lbl_stats)
+
         grid = QGridLayout()
         grid.setSpacing(12)
         root.addLayout(grid)
@@ -54,8 +58,8 @@ class DashboardPage(QWidget):
         self.tbl_recent_receipts = QTableWidget()
         self.tbl_recent_deliveries = QTableWidget()
 
-        receipts_card = self._make_table_card("Podgląd: ostatnie przyjęcia", self.tbl_recent_receipts)
-        deliveries_card = self._make_table_card("Podgląd: ostatnie dostawy", self.tbl_recent_deliveries)
+        receipts_card = self._make_table_card("Podgląd: ostatnie przyjęcia (25)", self.tbl_recent_receipts)
+        deliveries_card = self._make_table_card("Podgląd: ostatnie dostawy (25)", self.tbl_recent_deliveries)
 
         previews.addWidget(receipts_card, 0, 0)
         previews.addWidget(deliveries_card, 0, 1)
@@ -74,7 +78,7 @@ class DashboardPage(QWidget):
         return card
 
     def refresh_previews(self) -> None:
-        receipts = self.svc.search_devices(limit=8, offset=0).rows
+        receipts = self.svc.search_devices(limit=25, offset=0).rows
         receipt_rows = []
         for r in receipts:
             receipt_rows.append([
@@ -86,8 +90,13 @@ class DashboardPage(QWidget):
             ])
         fill_table(self.tbl_recent_receipts, ["ID", "Data", "Typ", "Nazwa", "SN/Kod"], receipt_rows)
 
-        deliveries = self.svc.list_recent_deliveries(8)
+        deliveries = self.svc.list_recent_deliveries(25)
         delivery_rows = []
         for r in deliveries:
             delivery_rows.append([r[0], r[1], r[2] or "", r[3] or "", r[4] or ""])
         fill_table(self.tbl_recent_deliveries, ["ID", "Data", "Nadawca", "Kurier", "Typ"], delivery_rows)
+
+        self.lbl_stats.setText(
+            f"Łącznie: przyjęcia {self.svc.search_devices(limit=1, offset=0).total_count} | "
+            f"dostawy {self.svc.search_deliveries(limit=1, offset=0).total_count}"
+        )

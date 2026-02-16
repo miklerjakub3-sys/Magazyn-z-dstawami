@@ -4,30 +4,29 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtCore import Qt
 from PySide6.QtGui import QAction
 from PySide6.QtWidgets import (
-    QMainWindow,
-    QWidget,
     QApplication,
-    QMessageBox,
-    QHBoxLayout,
-    QVBoxLayout,
-    QLabel,
-    QStackedWidget,
     QFrame,
+    QHBoxLayout,
+    QLabel,
+    QMainWindow,
+    QMessageBox,
+    QStackedWidget,
+    QVBoxLayout,
+    QWidget,
 )
 
-from ..config import VERSION, DB_PATH, BACKUP_DIR
 from ..backup import backup_manager
+from ..config import BACKUP_DIR, DB_PATH, VERSION
 from ..log import get_logger
 from ..services import MagazynService
-from .sidebar import SidebarNav
 from .dashboard import DashboardPage
-from .receipts_ui import ReceiptsTab
 from .deliveries_ui import DeliveriesTab
+from .receipts_ui import ReceiptsTab
 from .report_ui import ReportsTab
 from .settings_ui import SettingsPage
+from .sidebar import SidebarNav
 
 log = get_logger("magazyn.ui.main")
 
@@ -123,6 +122,10 @@ class MainWindow(QMainWindow):
         m_file.addAction(act_quit)
 
         m_help = menubar.addMenu("Pomoc")
+        act_help_manual = QAction("Instrukcja obsługi", self)
+        act_help_manual.triggered.connect(self.on_help_manual)
+        m_help.addAction(act_help_manual)
+
         act_about = QAction("O programie", self)
         act_about.triggered.connect(self.on_about)
         m_help.addAction(act_about)
@@ -137,6 +140,17 @@ class MainWindow(QMainWindow):
         except Exception as e:
             log.exception("manual backup failed")
             QMessageBox.critical(self, "Błąd", str(e))
+
+    def on_help_manual(self) -> None:
+        QMessageBox.information(
+            self,
+            "Instrukcja obsługi",
+            "1. Przyjęcia: wybierz typ, zeskanuj SN/Kod i zatwierdź Enter lub Dodaj.\n"
+            "2. Dostawy: użyj filtrów Od/Do i zaznacz dostawę, aby zarządzać zdjęciami.\n"
+            "3. Raporty: wybierz zakres dat i typ raportu, następnie Eksportuj PDF.\n"
+            "4. Ustawienia: utwórz lub przywróć backup oraz ustaw interwał autozapisu.\n"
+            "5. Skróty: Delete usuwa zaznaczony rekord, Ctrl+C kopiuje SN/Kod w Przyjęciach.",
+        )
 
     def on_about(self) -> None:
         QMessageBox.information(

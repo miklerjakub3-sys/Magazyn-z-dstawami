@@ -56,8 +56,8 @@ class ReportsTab(QWidget):
         form = QFormLayout()
         root.addLayout(form)
 
-        self.in_from = self._make_optional_date_edit()
-        self.in_to = self._make_optional_date_edit()
+        self.in_from = self._make_date_edit_today()
+        self.in_to = self._make_date_edit_today()
 
         self.btn_clear_from = QToolButton()
         self.btn_clear_from.setText("✕")
@@ -82,8 +82,8 @@ class ReportsTab(QWidget):
         form.addRow("Dostawy: typ", self.in_delivery_type)
 
         self.btn_export = QPushButton("Eksportuj PDF")
-        self.btn_clear_from.clicked.connect(lambda: self.in_from.setDate(self.in_from.minimumDate()))
-        self.btn_clear_to.clicked.connect(lambda: self.in_to.setDate(self.in_to.minimumDate()))
+        self.btn_clear_from.clicked.connect(lambda: self.in_from.setDate(QDate.currentDate()))
+        self.btn_clear_to.clicked.connect(lambda: self.in_to.setDate(QDate.currentDate()))
         self.btn_export.clicked.connect(self.on_export)
         if not PDF_AVAILABLE:
             self.btn_export.setEnabled(False)
@@ -92,25 +92,21 @@ class ReportsTab(QWidget):
         root.addStretch(1)
 
     @staticmethod
-    def _make_optional_date_edit() -> QDateEdit:
+    def _make_date_edit_today() -> QDateEdit:
         w = QDateEdit()
         w.setCalendarPopup(True)
         w.setDisplayFormat("yyyy-MM-dd")
-        w.setMinimumDate(QDate(1900, 1, 1))
-        w.setSpecialValueText("— wybierz datę —")
-        w.setDate(w.minimumDate())
+        w.setDate(QDate.currentDate())
         return w
 
     @staticmethod
-    def _date_or_empty(w: QDateEdit) -> str:
-        return "" if w.date() == w.minimumDate() else w.date().toString("yyyy-MM-dd")
+    def _date_text(w: QDateEdit) -> str:
+        return w.date().toString("yyyy-MM-dd")
 
     def on_export(self) -> None:
         try:
-            df = self._date_or_empty(self.in_from)
-            dt = self._date_or_empty(self.in_to)
-            if not df or not dt:
-                raise ValueError("Podaj zakres dat: Od i Do.")
+            df = self._date_text(self.in_from)
+            dt = self._date_text(self.in_to)
             validate_ymd(df)
             validate_ymd(dt)
 

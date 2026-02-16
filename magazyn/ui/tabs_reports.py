@@ -2,17 +2,29 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
+from PySide6.QtCore import QDate
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QFormLayout,
-    QLineEdit, QPushButton, QComboBox, QMessageBox, QLabel, QFileDialog, QRadioButton, QButtonGroup
+    QButtonGroup,
+    QComboBox,
+    QDateEdit,
+    QFileDialog,
+    QFormLayout,
+    QHBoxLayout,
+    QLabel,
+    QMessageBox,
+    QPushButton,
+    QRadioButton,
+    QToolButton,
+    QVBoxLayout,
+    QWidget,
 )
 
 from ..config import DELIVERY_TYPES
-from ..services import MagazynService
-from ..utils import today_str, validate_ymd
-from ..pdf_export import PDF_AVAILABLE, export_devices_to_pdf, export_deliveries_to_pdf
-from ..database import get_devices_by_date_range, get_deliveries_by_date_range
+from ..database import get_deliveries_by_date_range, get_devices_by_date_range
 from ..log import get_logger
+from ..pdf_export import PDF_AVAILABLE, export_deliveries_to_pdf, export_devices_to_pdf
+from ..services import MagazynService
+from ..utils import validate_ymd
 
 log = get_logger("magazyn.ui.reports")
 
@@ -44,17 +56,34 @@ class ReportsTab(QWidget):
         form = QFormLayout()
         root.addLayout(form)
 
-        self.in_from = QLineEdit()
-        self.in_to = QLineEdit(today_str())
-        self.in_receipt_type = QComboBox(); self.in_receipt_type.addItems(["Wszystkie","Urządzenie","Akcesorium"])
-        self.in_delivery_type = QComboBox(); self.in_delivery_type.addItems([""] + DELIVERY_TYPES)
+        self.in_from = self._make_optional_date_edit()
+        self.in_to = self._make_optional_date_edit()
 
-        form.addRow("Od (YYYY-MM-DD)", self.in_from)
-        form.addRow("Do (YYYY-MM-DD)", self.in_to)
+        self.btn_clear_from = QToolButton()
+        self.btn_clear_from.setText("✕")
+        self.btn_clear_to = QToolButton()
+        self.btn_clear_to.setText("✕")
+
+        self.in_receipt_type = QComboBox()
+        self.in_receipt_type.addItems(["Wszystkie", "Urządzenie", "Akcesorium"])
+        self.in_delivery_type = QComboBox()
+        self.in_delivery_type.addItems([""] + DELIVERY_TYPES)
+
+        od_row = QHBoxLayout()
+        od_row.addWidget(self.in_from)
+        od_row.addWidget(self.btn_clear_from)
+        do_row = QHBoxLayout()
+        do_row.addWidget(self.in_to)
+        do_row.addWidget(self.btn_clear_to)
+
+        form.addRow("Od (YYYY-MM-DD)", od_row)
+        form.addRow("Do (YYYY-MM-DD)", do_row)
         form.addRow("Przyjęcia: typ", self.in_receipt_type)
         form.addRow("Dostawy: typ", self.in_delivery_type)
 
         self.btn_export = QPushButton("Eksportuj PDF")
+        self.btn_clear_from.clicked.connect(lambda: self.in_from.setDate(self.in_from.minimumDate()))
+        self.btn_clear_to.clicked.connect(lambda: self.in_to.setDate(self.in_to.minimumDate()))
         self.btn_export.clicked.connect(self.on_export)
         if not PDF_AVAILABLE:
             self.btn_export.setEnabled(False)
@@ -62,17 +91,32 @@ class ReportsTab(QWidget):
         root.addWidget(self.btn_export)
         root.addStretch(1)
 
+    @staticmethod
+    def _make_optional_date_edit() -> QDateEdit:
+        w = QDateEdit()
+        w.setCalendarPopup(True)
+        w.setDisplayFormat("yyyy-MM-dd")
+        w.setMinimumDate(QDate(1900, 1, 1))
+        w.setSpecialValueText("— wybierz datę —")
+        w.setDate(w.minimumDate())
+        return w
+
+    @staticmethod
+    def _date_or_empty(w: QDateEdit) -> str:
+        return "" if w.date() == w.minimumDate() else w.date().toString("yyyy-MM-dd")
+
     def on_export(self) -> None:
         try:
-            df = self.in_from.text().strip()
-            dt = self.in_to.text().strip()
+            df = self._date_or_empty(self.in_from)
+            dt = self._date_or_empty(self.in_to)
             if not df or not dt:
                 raise ValueError("Podaj zakres dat: Od i Do.")
-            validate_ymd(df); validate_ymd(dt)
+            validate_ymd(df)
+            validate_ymd(dt)
 
             if self.rb_receipts.isChecked():
                 ftype = self.in_receipt_type.currentText()
-                item_type = {"Wszystkie":"all","Urządzenie":"device","Akcesorium":"accessory"}.get(ftype, "all")
+                item_type = {"Wszystkie": "all", "Urządzenie": "device", "Akcesorium": "accessory"}.get(ftype, "all")
                 rows = get_devices_by_date_range(df, dt, item_type)
                 if not rows:
                     QMessageBox.information(self, "Info", "Brak danych w tym zakresie.")

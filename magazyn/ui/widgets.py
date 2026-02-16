@@ -8,6 +8,9 @@ from PySide6.QtCore import Qt
 
 
 def fill_table(table: QTableWidget, headers: Sequence[str], rows: Sequence[Sequence[Any]]) -> None:
+    was_sorting_enabled = table.isSortingEnabled()
+    table.setSortingEnabled(False)
+
     table.clear()
     table.setColumnCount(len(headers))
     table.setHorizontalHeaderLabels(list(headers))
@@ -22,3 +25,4 @@ def fill_table(table: QTableWidget, headers: Sequence[str], rows: Sequence[Seque
 
     table.resizeColumnsToContents()
     table.resizeRowsToContents()
+    table.setSortingEnabled(was_sorting_enabled)

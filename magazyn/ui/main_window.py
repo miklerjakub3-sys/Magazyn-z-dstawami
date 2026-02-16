@@ -2,17 +2,32 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
-from PySide6.QtGui import QIcon, QAction
-from PySide6.QtWidgets import QMainWindow, QTabWidget, QApplication, QMessageBox
+from pathlib import Path
+
+from PySide6.QtCore import Qt
+from PySide6.QtGui import QAction
+from PySide6.QtWidgets import (
+    QMainWindow,
+    QWidget,
+    QApplication,
+    QMessageBox,
+    QHBoxLayout,
+    QVBoxLayout,
+    QLabel,
+    QStackedWidget,
+    QFrame,
+)
 
 from ..config import VERSION, DB_PATH, BACKUP_DIR
 from ..backup import backup_manager
 from ..log import get_logger
 from ..services import MagazynService
-
-from .tabs_receipts import ReceiptsTab
-from .tabs_deliveries import DeliveriesTab
-from .tabs_reports import ReportsTab
+from .sidebar import SidebarNav
+from .dashboard import DashboardPage
+from .receipts_ui import ReceiptsTab
+from .deliveries_ui import DeliveriesTab
+from .report_ui import ReportsTab
+from .settings_ui import SettingsPage
 
 log = get_logger("magazyn.ui.main")
 
@@ -22,22 +37,78 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.svc = svc
         self.setWindowTitle(f"Magazyn – Przyjęcia i Dostawy v{VERSION}")
-        self.resize(1400, 820)
+        self.resize(1500, 880)
 
-        self.tabs = QTabWidget()
-        self.setCentralWidget(self.tabs)
-
-        self.tab_receipts = ReceiptsTab(svc)
-        self.tab_deliveries = DeliveriesTab(svc)
-        self.tab_reports = ReportsTab(svc)
-
-        self.tabs.addTab(self.tab_receipts, "Przyjęcia")
-        self.tabs.addTab(self.tab_deliveries, "Dostawy")
-        self.tabs.addTab(self.tab_reports, "Raport PDF")
-
+        self._build_layout()
         self._build_menu()
+        self._apply_theme()
 
         backup_manager.start_auto_backup()
+
+    def _build_layout(self) -> None:
+        shell = QWidget()
+        root = QHBoxLayout(shell)
+        root.setContentsMargins(0, 0, 0, 0)
+        root.setSpacing(0)
+
+        self.sidebar = SidebarNav()
+        self.sidebar.page_selected.connect(self.show_page)
+        root.addWidget(self.sidebar)
+
+        content = QWidget()
+        content_l = QVBoxLayout(content)
+        content_l.setContentsMargins(16, 12, 16, 16)
+        content_l.setSpacing(10)
+
+        header = QFrame()
+        header.setProperty("card", True)
+        header_l = QVBoxLayout(header)
+        header_l.setContentsMargins(16, 12, 16, 12)
+        self.lbl_title = QLabel("Pulpit")
+        self.lbl_title.setProperty("title", True)
+        self.lbl_breadcrumbs = QLabel("Start / Pulpit")
+        self.lbl_breadcrumbs.setProperty("subtitle", True)
+        header_l.addWidget(self.lbl_title)
+        header_l.addWidget(self.lbl_breadcrumbs)
+        content_l.addWidget(header)
+
+        self.stack = QStackedWidget()
+        self.pages = {
+            "dashboard": DashboardPage(self.svc),
+            "receipts": ReceiptsTab(self.svc),
+            "deliveries": DeliveriesTab(self.svc),
+            "reports": ReportsTab(self.svc),
+            "settings": SettingsPage(),
+        }
+        for key in ["dashboard", "receipts", "deliveries", "reports", "settings"]:
+            self.stack.addWidget(self.pages[key])
+
+        content_l.addWidget(self.stack, 1)
+        root.addWidget(content, 1)
+
+        self.setCentralWidget(shell)
+        self.show_page("dashboard")
+
+    def _apply_theme(self) -> None:
+        qss = Path(__file__).with_name("styles").joinpath("app.qss")
+        if qss.exists():
+            self.setStyleSheet(qss.read_text(encoding="utf-8"))
+
+    def show_page(self, key: str) -> None:
+        titles = {
+            "dashboard": "Pulpit",
+            "receipts": "Przyjęcia",
+            "deliveries": "Dostawy",
+            "reports": "Raporty",
+            "settings": "Ustawienia",
+        }
+        page = self.pages.get(key)
+        if not page:
+            return
+        self.stack.setCurrentWidget(page)
+        self.lbl_title.setText(titles.get(key, key))
+        self.lbl_breadcrumbs.setText(f"Start / {titles.get(key, key)}")
+        self.sidebar.set_active(key)
 
     def _build_menu(self) -> None:
         menubar = self.menuBar()
@@ -76,31 +147,13 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event):
         try:
-            backup_manager.stop_auto_backup()
+            backup_manager.create_backup(manual=True)
         except Exception:
-            pass
-        super().closeEvent(event)
-
-    def closeEvent(self, event):
-        try:
-            # 1) backup przy zamknięciu
-            from magazyn.backup import backup_manager  # jeśli masz pakiet magazyn/
-            # albo: from ..backup import backup_manager  (gdy jesteś w magazyn/ui/)
-            backup_path = backup_manager.create_backup(manual=True)
-
-            # 2) opcjonalnie: zatrzymaj wątek auto-backupu
-            backup_manager.stop_auto_backup()
-
-            # (opcjonalnie) możesz dać popup:
-            # if backup_path:
-            #     QMessageBox.information(self, "Backup", f"Utworzono backup:\n{backup_path}")
-
-        except Exception as e:
-            # żeby nie blokować zamknięcia, tylko zalogować błąd
+            log.exception("Backup on close failed")
+        finally:
             try:
-                from magazyn.log import get_logger
-                get_logger("magazyn").exception("Backup on close failed")
+                backup_manager.stop_auto_backup()
             except Exception:
-                pass
+                log.exception("Stop auto backup failed")
 
         event.accept()

@@ -309,7 +309,19 @@ def search_devices(query="", item_type="all", order_by="received_date", order_di
     q = (query or "").strip()
     t = (item_type or "all").strip()
 
-    allowed_order = {"received_date": "received_date", "created_at": "created_at", "id": "id"}
+    allowed_order = {
+        "received_date": "received_date",
+        "created_at": "created_at",
+        "id": "id",
+        "item_type": "item_type",
+        "device_name": "device_name",
+        "serial_number": "serial_number",
+        "imei1": "imei1",
+        "imei2": "imei2",
+        "production_code": "production_code",
+        "delivery_id": "delivery_id",
+        "notes": "notes",
+    }
     ob = allowed_order.get(order_by, "received_date")
     od = "DESC" if (order_dir or "").upper() == "DESC" else "ASC"
 
@@ -543,7 +555,17 @@ def get_delivery(delivery_id: int):
         return cur.fetchone()
 
 
-def search_deliveries(date_from="", date_to="", sender="", courier="", delivery_type="", limit=1000, offset=0):
+def search_deliveries(
+    date_from="",
+    date_to="",
+    sender="",
+    courier="",
+    delivery_type="",
+    order_by="delivery_date",
+    order_dir="DESC",
+    limit=1000,
+    offset=0,
+):
     """Wyszukiwanie dostaw ze stronicowaniem"""
     where = []
     params = []
@@ -576,6 +598,20 @@ def search_deliveries(date_from="", date_to="", sender="", courier="", delivery_
         where.append("delivery_type = ?")
         params.append(delivery_type)
 
+    allowed_order = {
+        "delivery_date": "delivery_date",
+        "sender_name": "sender_name",
+        "courier_name": "courier_name",
+        "delivery_type": "delivery_type",
+        "tracking_number": "tracking_number",
+        "invoice_vat": "invoice_vat",
+        "notes": "notes",
+        "created_at": "created_at",
+        "id": "id",
+    }
+    ob = allowed_order.get(order_by, "delivery_date")
+    od = "DESC" if (order_dir or "").upper() == "DESC" else "ASC"
+
     where_sql = "WHERE " + " AND ".join(where) if where else ""
 
     with get_conn() as conn:
@@ -591,7 +627,7 @@ def search_deliveries(date_from="", date_to="", sender="", courier="", delivery_
                    tracking_number, invoice_vat, notes, created_at
             FROM deliveries
             {where_sql}
-            ORDER BY delivery_date DESC, id DESC
+            ORDER BY {ob} {od}, id DESC
             LIMIT ? OFFSET ?
         """, params + [limit, offset])
         

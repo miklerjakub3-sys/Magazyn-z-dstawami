@@ -5,7 +5,10 @@ a = Analysis(
     ['run_pyside6.py'],
     pathex=[],
     binaries=[],
-	datas=[('magazyn/ui/assets', 'assets')],
+	datas=[
+		('magazyn/ui/assets/axedserwis.png', 'magazyn/ui/assets'),
+		('magazyn/ui/styles/app.qss', 'magazyn/ui/styles'),
+	],
     hiddenimports=[],
     hookspath=[],
     hooksconfig={},

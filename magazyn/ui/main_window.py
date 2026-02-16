@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
-from PySide6.QtGui import QIcon, QAction
+from PySide6.QtGui import QAction
 from PySide6.QtWidgets import QMainWindow, QTabWidget, QApplication, QMessageBox
 
 from ..config import VERSION, DB_PATH, BACKUP_DIR
@@ -36,7 +36,6 @@ class MainWindow(QMainWindow):
         self.tabs.addTab(self.tab_reports, "Raport PDF")
 
         self._build_menu()
-
         backup_manager.start_auto_backup()
 
     def _build_menu(self) -> None:
@@ -76,31 +75,13 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event):
         try:
-            backup_manager.stop_auto_backup()
+            backup_manager.create_backup(manual=True)
         except Exception:
-            pass
-        super().closeEvent(event)
-
-    def closeEvent(self, event):
-        try:
-            # 1) backup przy zamknięciu
-            from magazyn.backup import backup_manager  # jeśli masz pakiet magazyn/
-            # albo: from ..backup import backup_manager  (gdy jesteś w magazyn/ui/)
-            backup_path = backup_manager.create_backup(manual=True)
-
-            # 2) opcjonalnie: zatrzymaj wątek auto-backupu
-            backup_manager.stop_auto_backup()
-
-            # (opcjonalnie) możesz dać popup:
-            # if backup_path:
-            #     QMessageBox.information(self, "Backup", f"Utworzono backup:\n{backup_path}")
-
-        except Exception as e:
-            # żeby nie blokować zamknięcia, tylko zalogować błąd
+            log.exception("Backup on close failed")
+        finally:
             try:
-                from magazyn.log import get_logger
-                get_logger("magazyn").exception("Backup on close failed")
+                backup_manager.stop_auto_backup()
             except Exception:
-                pass
+                log.exception("Stop auto backup failed")
 
         event.accept()

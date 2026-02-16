@@ -284,11 +284,8 @@ class ReceiptsTab(QWidget):
         top.addLayout(btns, stretch=2)
 
         self.btn_add = QPushButton("Dodaj")
-        self.btn_add.setProperty("role", "primary")
         self.btn_edit = QPushButton("Edytuj")
-        self.btn_edit.setProperty("role", "secondary")
         self.btn_del = QPushButton("Usuń")
-        self.btn_del.setProperty("role", "danger")
         self.btn_import = QPushButton("Import…")
         self.btn_export = QPushButton("Eksport CSV…")
         self.btn_copy = QPushButton("Kopiuj SN")
@@ -346,7 +343,6 @@ class ReceiptsTab(QWidget):
         self.table.setSelectionBehavior(QTableWidget.SelectRows)
         self.table.setSelectionMode(QTableWidget.ExtendedSelection)
         self.table.setSortingEnabled(True)
-        self.table.setAlternatingRowColors(True)
         root.addWidget(self.table, stretch=1)
 
         self.table.cellDoubleClicked.connect(lambda r, c: self.on_edit())
@@ -725,12 +721,6 @@ class ReceiptsTab(QWidget):
             self.table.horizontalHeader().setSortIndicator(self.sort_col, self.sort_dir)
 
             for i, r in enumerate(pr.rows):
-                type_item = self.table.item(i, 2)
-                if type_item:
-                    if r[2] == "device":
-                        type_item.setBackground(QColor("#e0f2fe"))
-                    else:
-                        type_item.setBackground(QColor("#fef3c7"))
                 item_type_raw = r[2]
                 has_notes = bool((r[8] or "").strip())
                 missing_imei = (item_type_raw == "device" and not (r[5] or "").strip())

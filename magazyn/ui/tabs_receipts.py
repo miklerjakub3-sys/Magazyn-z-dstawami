@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Sequence
 
-from PySide6.QtCore import Qt, QTimer
+from PySide6.QtCore import QDate, Qt, QTimer
 from PySide6.QtGui import QKeySequence, QShortcut, QColor, QGuiApplication
 from PySide6.QtWidgets import (
     QWidget,
@@ -21,6 +21,7 @@ from PySide6.QtWidgets import (
     QFileDialog,
     QDialog,
     QTextEdit,
+    QDateEdit,
 )
 
 from ..config import MAX_RESULTS_PER_PAGE, ITEM_TYPE_TO_LABEL
@@ -155,7 +156,9 @@ class EditDeviceDialog(QDialog):
         form = QFormLayout()
         root.addLayout(form)
 
-        self.in_date = QLineEdit()
+        self.in_date = QDateEdit()
+        self.in_date.setCalendarPopup(True)
+        self.in_date.setDisplayFormat("yyyy-MM-dd")
         self.in_type = QComboBox()
         self.in_type.addItems(["Urządzenie", "Akcesorium"])
         self.in_name = QLineEdit()
@@ -165,7 +168,7 @@ class EditDeviceDialog(QDialog):
         self.in_prod = QLineEdit()
         self.in_notes = QLineEdit()
 
-        form.addRow("Data (YYYY-MM-DD)", self.in_date)
+        form.addRow("Data", self.in_date)
         form.addRow("Typ", self.in_type)
         form.addRow("Nazwa", self.in_name)
         form.addRow("SN/Kod", self.in_sn)
@@ -194,7 +197,7 @@ class EditDeviceDialog(QDialog):
             self.close()
             return
 
-        self.in_date.setText(row[1] or "")
+        self.in_date.setDate(QDate.fromString(row[1], "yyyy-MM-dd") if row[1] else QDate.currentDate())
         self.in_type.setCurrentText("Urządzenie" if row[2] == "device" else "Akcesorium")
         self.in_name.setText(row[3] or "")
         self.in_sn.setText(row[4] or "")
@@ -205,12 +208,13 @@ class EditDeviceDialog(QDialog):
 
     def save(self) -> None:
         try:
-            validate_ymd(self.in_date.text().strip())
+            date_text = self.in_date.date().toString("yyyy-MM-dd")
+            validate_ymd(date_text)
             item_type = "device" if self.in_type.currentText() == "Urządzenie" else "accessory"
 
             self.svc.update_device(
                 device_id=self.device_id,
-                received_date=self.in_date.text().strip(),
+                received_date=date_text,
                 item_type=item_type,
                 device_name=self.in_name.text().strip(),
                 serial_number=self.in_sn.text().strip(),
@@ -235,6 +239,8 @@ class ReceiptsTab(QWidget):
         self.page = 0
         self.total_pages = 1
         self.total = 0
+        self.sort_col = 1
+        self.sort_dir = Qt.DescendingOrder
 
         self._build()
         self._install_shortcuts()
@@ -252,7 +258,10 @@ class ReceiptsTab(QWidget):
         form = QFormLayout()
         top.addLayout(form, stretch=4)
 
-        self.in_date = QLineEdit(today_str())
+        self.in_date = QDateEdit()
+        self.in_date.setCalendarPopup(True)
+        self.in_date.setDisplayFormat("yyyy-MM-dd")
+        self.in_date.setDate(QDate.fromString(today_str(), "yyyy-MM-dd"))
         self.in_mode = QComboBox()
         self.in_mode.addItems(["Urządzenie", "Akcesorium"])
         self.in_name = QLineEdit()
@@ -261,7 +270,7 @@ class ReceiptsTab(QWidget):
         self.in_imei2 = QLineEdit()
         self.in_prod = QLineEdit()
 
-        form.addRow("Data (YYYY-MM-DD)", self.in_date)
+        form.addRow("Data", self.in_date)
         form.addRow("Typ", self.in_mode)
         form.addRow("Nazwa", self.in_name)
         form.addRow("SN/Kod", self.in_sn)
@@ -282,11 +291,15 @@ class ReceiptsTab(QWidget):
         top.addLayout(btns, stretch=2)
 
         self.btn_add = QPushButton("Dodaj")
+        self.btn_add.setProperty("role", "primary")
         self.btn_edit = QPushButton("Edytuj")
+        self.btn_edit.setProperty("role", "secondary")
         self.btn_del = QPushButton("Usuń")
+        self.btn_del.setProperty("role", "danger")
         self.btn_import = QPushButton("Import…")
         self.btn_export = QPushButton("Eksport CSV…")
         self.btn_copy = QPushButton("Kopiuj SN")
+        self.btn_clear_form = QPushButton("Wyczyść formularz")
 
         btns.addWidget(self.btn_add)
         btns.addWidget(self.btn_edit)
@@ -294,6 +307,7 @@ class ReceiptsTab(QWidget):
         btns.addWidget(self.btn_import)
         btns.addWidget(self.btn_export)
         btns.addWidget(self.btn_copy)
+        btns.addWidget(self.btn_clear_form)
         btns.addStretch(1)
 
         self.btn_add.clicked.connect(self.on_add)
@@ -302,6 +316,7 @@ class ReceiptsTab(QWidget):
         self.btn_import.clicked.connect(self.on_open_import)
         self.btn_export.clicked.connect(self.on_export_csv)
         self.btn_copy.clicked.connect(self.copy_selected_sn)
+        self.btn_clear_form.clicked.connect(self.clear_form)
 
         self.in_mode.currentTextChanged.connect(self.apply_mode)
 
@@ -337,9 +352,13 @@ class ReceiptsTab(QWidget):
         self.table = QTableWidget()
         self.table.setSelectionBehavior(QTableWidget.SelectRows)
         self.table.setSelectionMode(QTableWidget.ExtendedSelection)
+        self.table.setSortingEnabled(True)
+        self.table.setAlternatingRowColors(True)
+        self.table.setMinimumHeight(460)
         root.addWidget(self.table, stretch=1)
 
         self.table.cellDoubleClicked.connect(lambda r, c: self.on_edit())
+        self.table.horizontalHeader().sectionClicked.connect(self.on_header_sort_clicked)
 
         # --- Paging
         paging_row = QHBoxLayout()
@@ -365,6 +384,11 @@ class ReceiptsTab(QWidget):
         self.btn_next.clicked.connect(lambda: self._goto(min(self.total_pages - 1, self.page + 1)))
         self.btn_last.clicked.connect(lambda: self._goto(max(0, self.total_pages - 1)))
 
+        root.setStretch(0, 0)
+        root.setStretch(1, 0)
+        root.setStretch(2, 5)
+        root.setStretch(3, 0)
+
         self.apply_mode()
 
     def _install_shortcuts(self) -> None:
@@ -373,18 +397,22 @@ class ReceiptsTab(QWidget):
 
     def apply_mode(self) -> None:
         is_accessory = self.in_mode.currentText() == "Akcesorium"
-        self.in_name.setEnabled(not is_accessory)
+        # Nazwę dla akcesorium można nadpisać ręcznie, ale domyślnie podpowiadamy.
+        self.in_name.setEnabled(True)
         self.in_imei1.setEnabled(not is_accessory)
         self.in_imei2.setEnabled(not is_accessory)
         self.in_prod.setEnabled(not is_accessory)
+        if is_accessory:
+            self.in_name.setPlaceholderText("np. Ładowarka, Kabel USB-C")
+            if not self.in_name.text().strip():
+                self.in_name.setText("Akcesorium")
+        else:
+            self.in_name.setPlaceholderText("")
 
     def _focus_scan_start(self):
-        if self.chk_scan.isChecked():
-            self.in_name.setFocus()
-            self.in_name.selectAll()
-        else:
-            self.in_name.setFocus()
-            self.in_name.selectAll()
+        target = self.in_sn if self.in_mode.currentText() == "Akcesorium" else self.in_name
+        target.setFocus()
+        target.selectAll()
 
     def _scan_next(self) -> None:
         if self.chk_cont.isChecked():
@@ -493,9 +521,19 @@ class ReceiptsTab(QWidget):
         dup_imei = {k for k, v in imei_count.items() if k and v > 1}
         return dup_sn, dup_imei
 
+    def _resolve_accessory_name(self, serial: str) -> str:
+        base = self.in_name.text().strip()
+        if base:
+            return base
+        serial = (serial or "").strip()
+        if serial:
+            return f"Akcesorium {serial[:12]}"
+        return "Akcesorium"
+
     def on_add(self) -> None:
         try:
-            validate_ymd(self.in_date.text().strip())
+            date_text = self.in_date.date().toString("yyyy-MM-dd")
+            validate_ymd(date_text)
             item_type = "device" if self.in_mode.currentText() == "Urządzenie" else "accessory"
 
             dups = self.svc.find_device_duplicates(
@@ -512,11 +550,16 @@ class ReceiptsTab(QWidget):
                 ):
                     return
 
+            serial = self.in_sn.text().strip()
+            device_name = self.in_name.text().strip()
+            if item_type == "accessory":
+                device_name = self._resolve_accessory_name(serial)
+
             self.svc.add_device(
-                received_date=self.in_date.text().strip(),
+                received_date=date_text,
                 item_type=item_type,
-                device_name=self.in_name.text().strip(),
-                serial_number=self.in_sn.text().strip(),
+                device_name=device_name,
+                serial_number=serial,
                 imei1=self.in_imei1.text().strip(),
                 imei2=self.in_imei2.text().strip(),
                 production_code=self.in_prod.text().strip(),
@@ -640,6 +683,26 @@ class ReceiptsTab(QWidget):
         self.page = 0
         self.refresh()
 
+    def clear_form(self) -> None:
+        self.in_date.setDate(QDate.fromString(today_str(), "yyyy-MM-dd"))
+        self.in_mode.setCurrentText("Urządzenie")
+        self.in_name.clear()
+        self.in_sn.clear()
+        self.in_imei1.clear()
+        self.in_imei2.clear()
+        self.in_prod.clear()
+        self.apply_mode()
+        self._focus_scan_start()
+
+    def on_header_sort_clicked(self, col: int) -> None:
+        if self.sort_col == col:
+            self.sort_dir = Qt.AscendingOrder if self.sort_dir == Qt.DescendingOrder else Qt.DescendingOrder
+        else:
+            self.sort_col = col
+            self.sort_dir = Qt.AscendingOrder
+        self.page = 0
+        self.refresh()
+
     def on_clear(self) -> None:
         self.search.clear()
         self.filter_type.setCurrentText("Wszystkie")
@@ -658,8 +721,20 @@ class ReceiptsTab(QWidget):
             pr = self.svc.search_devices(
                 query=self.search.text(),
                 item_type=item_type,
-                order_by="received_date",
-                order_dir="DESC",
+                order_by={
+                    0: "id",
+                    1: "received_date",
+                    2: "item_type",
+                    3: "device_name",
+                    4: "serial_number",
+                    5: "imei1",
+                    6: "imei2",
+                    7: "production_code",
+                    8: "delivery_id",
+                    9: "notes",
+                    10: "created_at",
+                }.get(self.sort_col, "received_date"),
+                order_dir="ASC" if self.sort_dir == Qt.AscendingOrder else "DESC",
                 limit=MAX_RESULTS_PER_PAGE,
                 offset=offset,
             )
@@ -679,8 +754,15 @@ class ReceiptsTab(QWidget):
                 rows.append([rr[0], rr[1], rr[2], rr[3], rr[4], rr[5], rr[6], rr[7], rr[8], rr[9], rr[10]])
 
             fill_table(self.table, headers, rows)
+            self.table.horizontalHeader().setSortIndicator(self.sort_col, self.sort_dir)
 
             for i, r in enumerate(pr.rows):
+                type_item = self.table.item(i, 2)
+                if type_item:
+                    if r[2] == "device":
+                        type_item.setBackground(QColor("#e0f2fe"))
+                    else:
+                        type_item.setBackground(QColor("#fef3c7"))
                 item_type_raw = r[2]
                 has_notes = bool((r[8] or "").strip())
                 missing_imei = (item_type_raw == "device" and not (r[5] or "").strip())

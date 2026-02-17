@@ -65,6 +65,7 @@ QPushButton[role="danger"] {
 }
 
 QTableWidget {
+  font-size: 12px;
   alternate-background-color: #f7f9fc;
   gridline-color: #eef2f7;
   selection-background-color: #dbeafe;
@@ -72,6 +73,7 @@ QTableWidget {
 }
 
 QHeaderView::section {
+  font-size: 12px;
   background: #eef2f7;
   border: none;
   border-right: 1px solid #e5e7eb;

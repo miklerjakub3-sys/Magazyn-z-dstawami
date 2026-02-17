@@ -42,14 +42,12 @@ def _make_optional_date_edit() -> QDateEdit:
     w = QDateEdit()
     w.setCalendarPopup(True)
     w.setDisplayFormat("yyyy-MM-dd")
-    w.setMinimumDate(QDate(1900, 1, 1))
-    w.setSpecialValueText("— wybierz datę —")
-    w.setDate(w.minimumDate())
+    w.setDate(QDate.currentDate())
     return w
 
 
 def _date_or_empty(w: QDateEdit) -> str:
-    return "" if w.date() == w.minimumDate() else w.date().toString("yyyy-MM-dd")
+    return w.date().toString("yyyy-MM-dd")
 
 
 class LinkReceiptsDialog(QDialog):
@@ -61,7 +59,7 @@ class LinkReceiptsDialog(QDialog):
         self.on_done = on_done
 
         self.setWindowTitle(f"Powiąż przyjęcia z dostawą ID={delivery_id}")
-        self.resize(1100, 650)
+        self.resize(980, 560)
 
         root = QVBoxLayout(self)
 
@@ -95,6 +93,7 @@ class LinkReceiptsDialog(QDialog):
         self.dt_pick.dateChanged.connect(lambda _: self.refresh())
 
         self.table = QTableWidget()
+        self.table.setStyleSheet("font-size: 12px;")
         self.table.setSelectionBehavior(QTableWidget.SelectRows)
         self.table.setSelectionMode(QTableWidget.ExtendedSelection)
         root.addWidget(self.table, 1)
@@ -253,9 +252,11 @@ class DeliveriesTab(QWidget):
         self.btn_last.clicked.connect(lambda: self._goto(max(0, self.total_pages - 1)))
 
         main_split = QSplitter(Qt.Vertical)
+        main_split.setChildrenCollapsible(False)
         root.addWidget(main_split, 1)
 
         split = QSplitter(Qt.Horizontal)
+        split.setChildrenCollapsible(False)
         main_split.addWidget(split)
 
         left = QWidget()
@@ -263,6 +264,7 @@ class DeliveriesTab(QWidget):
         left_l.setContentsMargins(0, 0, 0, 0)
 
         self.table = QTableWidget()
+        self.table.setStyleSheet("font-size: 12px;")
         self.table.setSelectionBehavior(QTableWidget.SelectRows)
         self.table.setSelectionMode(QTableWidget.SingleSelection)
         self.table.setSortingEnabled(True)
@@ -280,8 +282,8 @@ class DeliveriesTab(QWidget):
         self.tbl_linked.setSelectionMode(QTableWidget.ExtendedSelection)
         self.tbl_linked.setAlternatingRowColors(True)
         right_l.addWidget(self.tbl_linked, 1)
-        # attachments panel
-        right_l.addWidget(QLabel("Zdjęcia dostawy:"))
+
+        right_l.addWidget(QLabel("Załączniki dostawy:"))
         self.attachments = AttachmentGalleryWidget()
         self.list_att = self.attachments.list_widget
         self.btn_attach = self.attachments.btn_add
@@ -290,14 +292,14 @@ class DeliveriesTab(QWidget):
         right_l.addWidget(self.attachments, 1)
 
         split.addWidget(right)
-        split.setSizes([1050, 450])
+        split.setSizes([1280, 320])
 
         form_card = QFrame()
         form_card.setProperty("card", True)
         form_row = QHBoxLayout(form_card)
         form_row.setContentsMargins(12, 10, 12, 10)
         main_split.addWidget(form_card)
-        main_split.setSizes([760, 220])
+        main_split.setSizes([860, 160])
 
         form = QFormLayout()
         form_row.addLayout(form, stretch=2)
@@ -401,8 +403,8 @@ class DeliveriesTab(QWidget):
         self.refresh()
 
     def on_clear(self) -> None:
-        self.f_from.setDate(self.f_from.minimumDate())
-        self.f_to.setDate(self.f_to.minimumDate())
+        self.f_from.setDate(QDate.currentDate())
+        self.f_to.setDate(QDate.currentDate())
         self.f_type.setCurrentText("")
         self.page = 0
         self.refresh()
@@ -431,11 +433,8 @@ class DeliveriesTab(QWidget):
         try:
             df = _date_or_empty(self.f_from)
             dt = _date_or_empty(self.f_to)
-            if (df and not dt) or (dt and not df):
-                raise ValueError("Podaj oba pola zakresu dat (Od i Do) albo zostaw puste.")
-            if df and dt:
-                validate_ymd(df)
-                validate_ymd(dt)
+            validate_ymd(df)
+            validate_ymd(dt)
 
             pr = self.svc.search_deliveries(
                 date_from=df,

@@ -20,9 +20,9 @@ class AttachmentGalleryWidget(QWidget):
         root.addWidget(self.list_widget, 1)
 
         row = QHBoxLayout()
-        self.btn_add = QPushButton("Add Photo")
-        self.btn_preview = QPushButton("Preview")
-        self.btn_remove = QPushButton("Remove Photo")
+        self.btn_add = QPushButton("Dodaj zdjęcie")
+        self.btn_preview = QPushButton("Podgląd")
+        self.btn_remove = QPushButton("Usuń zdjęcie")
         row.addWidget(self.btn_add)
         row.addWidget(self.btn_preview)
         row.addWidget(self.btn_remove)

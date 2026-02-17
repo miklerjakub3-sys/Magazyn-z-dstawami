@@ -29,6 +29,21 @@ from ..utils import validate_ymd
 log = get_logger("magazyn.ui.reports")
 
 
+class OptionalDateEdit(QDateEdit):
+    def __init__(self) -> None:
+        super().__init__()
+        self.setCalendarPopup(True)
+        self.setDisplayFormat("yyyy-MM-dd")
+        self.setMinimumDate(QDate(1900, 1, 1))
+        self.setSpecialValueText("— wybierz datę —")
+        self.setDate(self.minimumDate())
+
+    def showPopup(self) -> None:
+        if self.date() == self.minimumDate():
+            self.setDate(QDate.currentDate())
+        super().showPopup()
+
+
 class ReportsTab(QWidget):
     def __init__(self, svc: MagazynService):
         super().__init__()
@@ -37,6 +52,8 @@ class ReportsTab(QWidget):
 
     def _build(self) -> None:
         root = QVBoxLayout(self)
+        root.setContentsMargins(12, 12, 12, 12)
+        root.setSpacing(8)
 
         if not PDF_AVAILABLE:
             root.addWidget(QLabel("Brak reportlab – raporty PDF wyłączone. Zainstaluj: pip install reportlab"))
@@ -56,8 +73,8 @@ class ReportsTab(QWidget):
         form = QFormLayout()
         root.addLayout(form)
 
-        self.in_from = self._make_date_edit_today()
-        self.in_to = self._make_date_edit_today()
+        self.in_from = OptionalDateEdit()
+        self.in_to = OptionalDateEdit()
 
         self.btn_clear_from = QToolButton()
         self.btn_clear_from.setText("✕")
@@ -76,14 +93,16 @@ class ReportsTab(QWidget):
         do_row.addWidget(self.in_to)
         do_row.addWidget(self.btn_clear_to)
 
-        form.addRow("Od (YYYY-MM-DD)", od_row)
-        form.addRow("Do (YYYY-MM-DD)", do_row)
+        form.addRow("Od", od_row)
+        form.addRow("Do", do_row)
         form.addRow("Przyjęcia: typ", self.in_receipt_type)
         form.addRow("Dostawy: typ", self.in_delivery_type)
 
         self.btn_export = QPushButton("Eksportuj PDF")
-        self.btn_clear_from.clicked.connect(lambda: self.in_from.setDate(QDate.currentDate()))
-        self.btn_clear_to.clicked.connect(lambda: self.in_to.setDate(QDate.currentDate()))
+        for w in (self.in_from, self.in_to, self.in_receipt_type, self.in_delivery_type, self.btn_export):
+            w.setProperty("compact", True)
+        self.btn_clear_from.clicked.connect(lambda: self.in_from.setDate(self.in_from.minimumDate()))
+        self.btn_clear_to.clicked.connect(lambda: self.in_to.setDate(self.in_to.minimumDate()))
         self.btn_export.clicked.connect(self.on_export)
         if not PDF_AVAILABLE:
             self.btn_export.setEnabled(False)
@@ -92,23 +111,22 @@ class ReportsTab(QWidget):
         root.addStretch(1)
 
     @staticmethod
-    def _make_date_edit_today() -> QDateEdit:
-        w = QDateEdit()
-        w.setCalendarPopup(True)
-        w.setDisplayFormat("yyyy-MM-dd")
-        w.setDate(QDate.currentDate())
-        return w
-
-    @staticmethod
     def _date_text(w: QDateEdit) -> str:
-        return w.date().toString("yyyy-MM-dd")
+        return "" if w.date() == w.minimumDate() else w.date().toString("yyyy-MM-dd")
 
     def on_export(self) -> None:
         try:
             df = self._date_text(self.in_from)
             dt = self._date_text(self.in_to)
-            validate_ymd(df)
-            validate_ymd(dt)
+            if df:
+                validate_ymd(df)
+            if dt:
+                validate_ymd(dt)
+            if df and dt and df > dt:
+                raise ValueError("Zakres dat jest niepoprawny: „Od” musi być mniejsze lub równe „Do”.")
+
+            from_label = df or "brak"
+            to_label = dt or "brak"
 
             if self.rb_receipts.isChecked():
                 ftype = self.in_receipt_type.currentText()
@@ -117,7 +135,7 @@ class ReportsTab(QWidget):
                 if not rows:
                     QMessageBox.information(self, "Info", "Brak danych w tym zakresie.")
                     return
-                path, _ = QFileDialog.getSaveFileName(self, "Zapisz raport", f"raport_przyjecia_{df}_do_{dt}.pdf", "PDF (*.pdf)")
+                path, _ = QFileDialog.getSaveFileName(self, "Zapisz raport", f"raport_przyjecia_{from_label}_do_{to_label}.pdf", "PDF (*.pdf)")
                 if not path:
                     return
                 export_devices_to_pdf(path, rows, df, dt, ftype)
@@ -128,7 +146,7 @@ class ReportsTab(QWidget):
                 if not rows:
                     QMessageBox.information(self, "Info", "Brak danych w tym zakresie.")
                     return
-                path, _ = QFileDialog.getSaveFileName(self, "Zapisz raport", f"raport_dostawy_{df}_do_{dt}.pdf", "PDF (*.pdf)")
+                path, _ = QFileDialog.getSaveFileName(self, "Zapisz raport", f"raport_dostawy_{from_label}_do_{to_label}.pdf", "PDF (*.pdf)")
                 if not path:
                     return
                 export_deliveries_to_pdf(path, rows, df, dt, dtype)

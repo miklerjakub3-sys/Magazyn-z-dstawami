@@ -11,6 +11,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QHBoxLayout,
     QFormLayout,
+    QGridLayout,
     QLineEdit,
     QPushButton,
     QComboBox,
@@ -22,6 +23,10 @@ from PySide6.QtWidgets import (
     QDialog,
     QTextEdit,
     QDateEdit,
+    QFrame,
+    QSplitter,
+    QToolButton,
+    QSizePolicy,
 )
 
 from ..config import MAX_RESULTS_PER_PAGE, ITEM_TYPE_TO_LABEL
@@ -31,6 +36,25 @@ from ..log import get_logger
 from .widgets import fill_table
 
 log = get_logger("magazyn.ui.receipts")
+
+
+class OptionalDateEdit(QDateEdit):
+    def __init__(self) -> None:
+        super().__init__()
+        self.setCalendarPopup(True)
+        self.setDisplayFormat("yyyy-MM-dd")
+        self.setMinimumDate(QDate(1900, 1, 1))
+        self.setSpecialValueText("— wybierz datę —")
+        self.setDate(self.minimumDate())
+
+    def showPopup(self) -> None:
+        if self.date() == self.minimumDate():
+            self.setDate(QDate.currentDate())
+        super().showPopup()
+
+
+def _date_or_empty(w: QDateEdit) -> str:
+    return "" if w.date() == w.minimumDate() else w.date().toString("yyyy-MM-dd")
 
 
 class ImportDialog(QDialog):
@@ -250,18 +274,70 @@ class ReceiptsTab(QWidget):
 
     def _build(self) -> None:
         root = QVBoxLayout(self)
+        root.setContentsMargins(8, 8, 8, 8)
+        root.setSpacing(6)
 
-        # --- Top controls (form + options + buttons)
-        top = QHBoxLayout()
-        root.addLayout(top)
+        search_row = QHBoxLayout()
+        search_row.setSpacing(6)
+        root.addLayout(search_row)
 
-        form = QFormLayout()
-        top.addLayout(form, stretch=4)
+        self.search = QLineEdit()
+        self.search.setPlaceholderText("Szukaj (nazwa, SN, IMEI, uwagi...)")
+        self.search.setProperty("compact", True)
+        self.filter_type = QComboBox()
+        self.filter_type.addItems(["Wszystkie", "Urządzenie", "Akcesorium"])
+        self.filter_type.setProperty("compact", True)
+        self.filter_from = OptionalDateEdit()
+        self.filter_from.setProperty("compact", True)
+        self.filter_to = OptionalDateEdit()
+        self.filter_to.setProperty("compact", True)
+
+        self.btn_search = QPushButton("Szukaj")
+        self.btn_search.setProperty("compact", True)
+        self.btn_clear = QPushButton("Wyczyść")
+        self.btn_clear.setProperty("compact", True)
+
+        search_row.addWidget(QLabel("Szukaj:"))
+        search_row.addWidget(self.search, stretch=2)
+        search_row.addWidget(QLabel("Typ:"))
+        search_row.addWidget(self.filter_type)
+        search_row.addWidget(QLabel("Od:"))
+        search_row.addWidget(self.filter_from)
+        search_row.addWidget(QLabel("Do:"))
+        search_row.addWidget(self.filter_to)
+        search_row.addWidget(self.btn_search)
+        search_row.addWidget(self.btn_clear)
+
+        self.btn_search.clicked.connect(self.on_search)
+        self.btn_clear.clicked.connect(self.on_clear)
+
+        split = QSplitter(Qt.Vertical)
+        split.setChildrenCollapsible(False)
+        root.addWidget(split, stretch=1)
+
+        self.table = QTableWidget()
+        self.table.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.table.setSelectionBehavior(QTableWidget.SelectRows)
+        self.table.setSelectionMode(QTableWidget.ExtendedSelection)
+        self.table.setSortingEnabled(True)
+        self.table.setAlternatingRowColors(True)
+        split.addWidget(self.table)
+
+        form_card = QFrame()
+        form_card.setProperty("card", True)
+        form_row = QHBoxLayout(form_card)
+        form_row.setContentsMargins(10, 8, 10, 8)
+        form_row.setSpacing(8)
+
+        form_grid = QGridLayout()
+        form_grid.setHorizontalSpacing(8)
+        form_grid.setVerticalSpacing(4)
+        form_row.addLayout(form_grid, stretch=3)
 
         self.in_date = QDateEdit()
         self.in_date.setCalendarPopup(True)
         self.in_date.setDisplayFormat("yyyy-MM-dd")
-        self.in_date.setDate(QDate.fromString(today_str(), "yyyy-MM-dd"))
+        self.in_date.setDate(QDate.currentDate())
         self.in_mode = QComboBox()
         self.in_mode.addItems(["Urządzenie", "Akcesorium"])
         self.in_name = QLineEdit()
@@ -270,16 +346,27 @@ class ReceiptsTab(QWidget):
         self.in_imei2 = QLineEdit()
         self.in_prod = QLineEdit()
 
-        form.addRow("Data", self.in_date)
-        form.addRow("Typ", self.in_mode)
-        form.addRow("Nazwa", self.in_name)
-        form.addRow("SN/Kod", self.in_sn)
-        form.addRow("IMEI1", self.in_imei1)
-        form.addRow("IMEI2", self.in_imei2)
-        form.addRow("Kod prod.", self.in_prod)
+        for w in (self.in_date, self.in_mode, self.in_name, self.in_sn, self.in_imei1, self.in_imei2, self.in_prod):
+            w.setProperty("compact", True)
+
+        form_grid.addWidget(QLabel("Data"), 0, 0)
+        form_grid.addWidget(self.in_date, 0, 1)
+        form_grid.addWidget(QLabel("Typ"), 0, 2)
+        form_grid.addWidget(self.in_mode, 0, 3)
+        form_grid.addWidget(QLabel("Nazwa"), 1, 0)
+        form_grid.addWidget(self.in_name, 1, 1)
+        form_grid.addWidget(QLabel("SN/Kod"), 1, 2)
+        form_grid.addWidget(self.in_sn, 1, 3)
+        form_grid.addWidget(QLabel("IMEI1"), 2, 0)
+        form_grid.addWidget(self.in_imei1, 2, 1)
+        form_grid.addWidget(QLabel("IMEI2"), 2, 2)
+        form_grid.addWidget(self.in_imei2, 2, 3)
+        form_grid.addWidget(QLabel("Kod produktu"), 3, 0)
+        form_grid.addWidget(self.in_prod, 3, 1)
 
         opts = QVBoxLayout()
-        top.addLayout(opts, stretch=2)
+        opts.setSpacing(4)
+        form_row.addLayout(opts, stretch=1)
         self.chk_scan = QCheckBox("Tryb skanowania (fokus na SN)")
         self.chk_cont = QCheckBox("Ciągłe (Enter=Dodaj)")
         self.chk_scan.setChecked(True)
@@ -288,7 +375,8 @@ class ReceiptsTab(QWidget):
         opts.addStretch(1)
 
         btns = QVBoxLayout()
-        top.addLayout(btns, stretch=2)
+        btns.setSpacing(4)
+        form_row.addLayout(btns, stretch=1)
 
         self.btn_add = QPushButton("Dodaj")
         self.btn_add.setProperty("role", "primary")
@@ -300,6 +388,13 @@ class ReceiptsTab(QWidget):
         self.btn_export = QPushButton("Eksport CSV…")
         self.btn_copy = QPushButton("Kopiuj SN")
         self.btn_clear_form = QPushButton("Wyczyść formularz")
+        self.btn_toggle_form = QToolButton()
+        self.btn_toggle_form.setCheckable(True)
+        self.btn_toggle_form.setChecked(True)
+        self.btn_toggle_form.setText("Zwiń formularz")
+
+        for b in (self.btn_add, self.btn_edit, self.btn_del, self.btn_import, self.btn_export, self.btn_copy, self.btn_clear_form):
+            b.setProperty("compact", True)
 
         btns.addWidget(self.btn_add)
         btns.addWidget(self.btn_edit)
@@ -308,8 +403,15 @@ class ReceiptsTab(QWidget):
         btns.addWidget(self.btn_export)
         btns.addWidget(self.btn_copy)
         btns.addWidget(self.btn_clear_form)
+        btns.addWidget(self.btn_toggle_form)
         btns.addStretch(1)
 
+        split.addWidget(form_card)
+        split.setStretchFactor(0, 5)
+        split.setStretchFactor(1, 1)
+        split.setSizes([900, 260])
+
+        self.btn_toggle_form.toggled.connect(lambda checked: self._toggle_form(split, checked))
         self.btn_add.clicked.connect(self.on_add)
         self.btn_del.clicked.connect(self.on_delete)
         self.btn_edit.clicked.connect(self.on_edit)
@@ -320,47 +422,13 @@ class ReceiptsTab(QWidget):
 
         self.in_mode.currentTextChanged.connect(self.apply_mode)
 
-        # enter flow like improved
         for w in (self.in_name, self.in_sn, self.in_imei1, self.in_imei2, self.in_prod):
             w.returnPressed.connect(self._scan_next)
         self.in_name.returnPressed.connect(self._scan_full_line)
 
-        # --- Search row
-        search_row = QHBoxLayout()
-        root.addLayout(search_row)
-
-        self.search = QLineEdit()
-        self.search.setPlaceholderText("Szukaj (nazwa, SN, IMEI, uwagi...)")
-
-        self.filter_type = QComboBox()
-        self.filter_type.addItems(["Wszystkie", "Urządzenie", "Akcesorium"])
-
-        self.btn_search = QPushButton("Szukaj")
-        self.btn_clear = QPushButton("Wyczyść")
-
-        search_row.addWidget(QLabel("Szukaj:"))
-        search_row.addWidget(self.search, stretch=2)
-        search_row.addWidget(QLabel("Filtr:"))
-        search_row.addWidget(self.filter_type)
-        search_row.addWidget(self.btn_search)
-        search_row.addWidget(self.btn_clear)
-
-        self.btn_search.clicked.connect(self.on_search)
-        self.btn_clear.clicked.connect(self.on_clear)
-
-        # --- Table
-        self.table = QTableWidget()
-        self.table.setSelectionBehavior(QTableWidget.SelectRows)
-        self.table.setSelectionMode(QTableWidget.ExtendedSelection)
-        self.table.setSortingEnabled(True)
-        self.table.setAlternatingRowColors(True)
-        self.table.setMinimumHeight(460)
-        root.addWidget(self.table, stretch=1)
-
         self.table.cellDoubleClicked.connect(lambda r, c: self.on_edit())
         self.table.horizontalHeader().sectionClicked.connect(self.on_header_sort_clicked)
 
-        # --- Paging
         paging_row = QHBoxLayout()
         root.addLayout(paging_row)
 
@@ -371,6 +439,7 @@ class ReceiptsTab(QWidget):
         self.btn_last = QPushButton("⏭")
         for b in (self.btn_first, self.btn_prev, self.btn_next, self.btn_last):
             b.setFixedWidth(44)
+            b.setProperty("compact", True)
 
         paging_row.addWidget(self.btn_first)
         paging_row.addWidget(self.btn_prev)
@@ -390,6 +459,14 @@ class ReceiptsTab(QWidget):
         root.setStretch(3, 0)
 
         self.apply_mode()
+
+    def _toggle_form(self, split: QSplitter, expanded: bool) -> None:
+        if expanded:
+            self.btn_toggle_form.setText("Zwiń formularz")
+            split.setSizes([900, 260])
+        else:
+            self.btn_toggle_form.setText("Rozwiń formularz")
+            split.setSizes([1160, 1])
 
     def _install_shortcuts(self) -> None:
         QShortcut(QKeySequence("Ctrl+C"), self, self.copy_selected_sn)
@@ -622,7 +699,7 @@ class ReceiptsTab(QWidget):
             rows_out: List[List[str]] = []
             offset = 0
             while True:
-                pr = self.svc.search_devices(q, item_type, "received_date", "DESC", 1000, offset)
+                pr = self.svc.search_devices(q, item_type, "", "", "received_date", "DESC", 1000, offset)
                 if not pr.rows:
                     break
                 for r in pr.rows:
@@ -684,7 +761,7 @@ class ReceiptsTab(QWidget):
         self.refresh()
 
     def clear_form(self) -> None:
-        self.in_date.setDate(QDate.fromString(today_str(), "yyyy-MM-dd"))
+        self.in_date.setDate(QDate.currentDate())
         self.in_mode.setCurrentText("Urządzenie")
         self.in_name.clear()
         self.in_sn.clear()
@@ -706,6 +783,8 @@ class ReceiptsTab(QWidget):
     def on_clear(self) -> None:
         self.search.clear()
         self.filter_type.setCurrentText("Wszystkie")
+        self.filter_from.setDate(self.filter_from.minimumDate())
+        self.filter_to.setDate(self.filter_to.minimumDate())
         self.page = 0
         self.refresh()
 
@@ -718,9 +797,17 @@ class ReceiptsTab(QWidget):
                 "Akcesorium": "accessory",
             }.get(self.filter_type.currentText(), "all")
 
+            date_from = _date_or_empty(self.filter_from)
+            date_to = _date_or_empty(self.filter_to)
+            if date_from and date_to and date_from > date_to:
+                QMessageBox.information(self, "Info", "Zakres dat jest niepoprawny: „Od” musi być mniejsze lub równe „Do”.")
+                return
+
             pr = self.svc.search_devices(
                 query=self.search.text(),
                 item_type=item_type,
+                date_from=date_from,
+                date_to=date_to,
                 order_by={
                     0: "id",
                     1: "received_date",

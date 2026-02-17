@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 from typing import Any, List, Optional
 
-from PySide6.QtCore import QDate, Qt
+from PySide6.QtCore import QDate, QSettings, Qt
 from PySide6.QtGui import QColor, QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QCheckBox,
@@ -37,16 +37,27 @@ from .widgets import fill_table
 log = get_logger("magazyn.ui.deliveries")
 
 
+class OptionalDateEdit(QDateEdit):
+    def __init__(self) -> None:
+        super().__init__()
+        self.setCalendarPopup(True)
+        self.setDisplayFormat("yyyy-MM-dd")
+        self.setMinimumDate(QDate(1900, 1, 1))
+        self.setSpecialValueText("— wybierz datę —")
+        self.setDate(self.minimumDate())
+
+    def showPopup(self) -> None:
+        if self.date() == self.minimumDate():
+            self.setDate(QDate.currentDate())
+        super().showPopup()
+
+
 def _make_optional_date_edit() -> QDateEdit:
-    w = QDateEdit()
-    w.setCalendarPopup(True)
-    w.setDisplayFormat("yyyy-MM-dd")
-    w.setDate(QDate.currentDate())
-    return w
+    return OptionalDateEdit()
 
 
 def _date_or_empty(w: QDateEdit) -> str:
-    return w.date().toString("yyyy-MM-dd")
+    return "" if w.date() == w.minimumDate() else w.date().toString("yyyy-MM-dd")
 
 
 class LinkReceiptsDialog(QDialog):
@@ -196,6 +207,7 @@ class DeliveriesTab(QWidget):
         self.total = 0
         self.sort_col = 1
         self.sort_dir = Qt.DescendingOrder
+        self._settings = QSettings("Magazyn", "DostawyUI")
         self._build()
         self._install_shortcuts()
         self.refresh_lists()
@@ -291,14 +303,14 @@ class DeliveriesTab(QWidget):
         right_l.addWidget(self.attachments, 1)
 
         split.addWidget(right)
-        split.setSizes([1280, 320])
+        split.setSizes([1360, 280])
 
         form_card = QFrame()
         form_card.setProperty("card", True)
         form_row = QHBoxLayout(form_card)
         form_row.setContentsMargins(12, 10, 12, 10)
         main_split.addWidget(form_card)
-        main_split.setSizes([860, 160])
+        main_split.setSizes([920, 120])
 
         form = QFormLayout()
         form_row.addLayout(form, stretch=2)
@@ -317,6 +329,9 @@ class DeliveriesTab(QWidget):
         self.in_tracking = QLineEdit()
         self.in_vat = QCheckBox("Faktura VAT")
         self.in_notes = QLineEdit()
+
+        for w in (self.in_date, self.in_sender, self.in_courier, self.in_type, self.in_tracking, self.in_notes):
+            w.setMaximumHeight(28)
 
         form.addRow("Data", self.in_date)
         form.addRow("Nadawca", self.in_sender)
@@ -357,6 +372,8 @@ class DeliveriesTab(QWidget):
         self.table.itemSelectionChanged.connect(self.load_selected)
         self.table.itemSelectionChanged.connect(self._update_context_actions)
         self.table.horizontalHeader().sectionClicked.connect(self.on_header_sort_clicked)
+        self.table.horizontalHeader().sectionResized.connect(lambda *_: self._save_column_widths(self.table, "main_table_widths"))
+        self.tbl_linked.horizontalHeader().sectionResized.connect(lambda *_: self._save_column_widths(self.tbl_linked, "linked_table_widths"))
         self.list_att.itemDoubleClicked.connect(lambda _: self.on_open_attachment())
         self.list_att.itemSelectionChanged.connect(self._update_context_actions)
         self._update_context_actions()
@@ -402,8 +419,8 @@ class DeliveriesTab(QWidget):
         self.refresh()
 
     def on_clear(self) -> None:
-        self.f_from.setDate(QDate.currentDate())
-        self.f_to.setDate(QDate.currentDate())
+        self.f_from.setDate(self.f_from.minimumDate())
+        self.f_to.setDate(self.f_to.minimumDate())
         self.f_type.setCurrentText("")
         self.page = 0
         self.refresh()
@@ -432,8 +449,10 @@ class DeliveriesTab(QWidget):
         try:
             df = _date_or_empty(self.f_from)
             dt = _date_or_empty(self.f_to)
-            validate_ymd(df)
-            validate_ymd(dt)
+            if df:
+                validate_ymd(df)
+            if dt:
+                validate_ymd(dt)
 
             pr = self.svc.search_deliveries(
                 date_from=df,
@@ -467,6 +486,7 @@ class DeliveriesTab(QWidget):
                 vat = "TAK" if int(r[6] or 0) == 1 else "NIE"
                 rows.append([r[0], r[1], r[2] or "", r[3] or "", r[4] or "", vat, one_line(r[7] or ""), r[8] or "", r[5] or ""])
             fill_table(self.table, headers, rows)
+            self._restore_column_widths(self.table, "main_table_widths")
             self.table.horizontalHeader().setSortIndicator(self.sort_col, self.sort_dir)
 
             for i, r in enumerate(pr.rows):
@@ -516,6 +536,7 @@ class DeliveriesTab(QWidget):
                 out.append([g(0), ITEM_TYPE_TO_LABEL.get(g(2), g(2)), g(3), g(4), g(5), g(6), g(7), g(8)])
 
             fill_table(self.tbl_linked, ["ID", "Typ", "Nazwa", "SN/Kod", "IMEI1", "IMEI2", "Kod prod.", "Uwagi"], out)
+            self._restore_column_widths(self.tbl_linked, "linked_table_widths")
 
             for row in self.svc.list_delivery_attachments(did):
                 att_id = row[0]
@@ -655,6 +676,26 @@ class DeliveriesTab(QWidget):
                 subprocess.call(["xdg-open", path])
         except Exception as e:
             QMessageBox.warning(self, "Uwaga", f"Nie udało się otworzyć pliku: {e}")
+
+    def _restore_column_widths(self, table: QTableWidget, key: str) -> None:
+        raw = self._settings.value(key, "")
+        if not raw:
+            return
+        try:
+            widths = [int(x) for x in str(raw).split(",") if x.strip()]
+            if len(widths) != table.columnCount():
+                return
+            for i, w in enumerate(widths):
+                table.setColumnWidth(i, w)
+        except Exception:
+            pass
+
+    def _save_column_widths(self, table: QTableWidget, key: str) -> None:
+        try:
+            widths = [str(table.columnWidth(i)) for i in range(table.columnCount())]
+            self._settings.setValue(key, ",".join(widths))
+        except Exception:
+            pass
 
     def on_export_csv(self) -> None:
         try:

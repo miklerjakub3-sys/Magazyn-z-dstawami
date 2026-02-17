@@ -90,11 +90,12 @@ class DashboardPage(QWidget):
             ])
         fill_table(self.tbl_recent_receipts, ["ID", "Data", "Typ", "Nazwa", "SN/Kod"], receipt_rows)
 
-        deliveries = self.svc.list_recent_deliveries(25)
+        deliveries = self.svc.search_deliveries(limit=25, offset=0).rows
         delivery_rows = []
         for r in deliveries:
-            delivery_rows.append([r[0], r[1], r[2] or "", r[3] or "", r[4] or ""])
-        fill_table(self.tbl_recent_deliveries, ["ID", "Data", "Nadawca", "Kurier", "Typ"], delivery_rows)
+            # r: id, date, sender, courier, type, tracking, vat, notes, created
+            delivery_rows.append([r[0], r[1], r[2] or "", r[3] or "", r[4] or "", r[5] or ""])
+        fill_table(self.tbl_recent_deliveries, ["ID", "Data", "Nadawca", "Kurier", "Typ", "Nr przesyłki"], delivery_rows)
 
         self.lbl_stats.setText(
             f"Łącznie: przyjęcia {self.svc.search_devices(limit=1, offset=0).total_count} | "

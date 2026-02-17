@@ -581,8 +581,14 @@ def search_deliveries(
         validate_ymd(dt)
         where.append("delivery_date BETWEEN ? AND ?")
         params.extend([df, dt])
-    elif df or dt:
-        raise ValueError("Podaj oba pola zakresu dat (od i do) albo zostaw puste.")
+    elif df:
+        validate_ymd(df)
+        where.append("delivery_date >= ?")
+        params.append(df)
+    elif dt:
+        validate_ymd(dt)
+        where.append("delivery_date <= ?")
+        params.append(dt)
 
     if sender:
         where.append("COALESCE(sender_name,'') = ?")

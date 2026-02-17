@@ -11,6 +11,10 @@ def fill_table(table: QTableWidget, headers: Sequence[str], rows: Sequence[Seque
     was_sorting_enabled = table.isSortingEnabled()
     table.setSortingEnabled(False)
 
+    # Zachowujemy szerokości kolumn, żeby odświeżenie danych nie resetowało
+    # ręcznie ustawionych proporcji tabel przez użytkownika.
+    old_widths = [table.columnWidth(i) for i in range(table.columnCount())]
+
     table.clear()
     table.setColumnCount(len(headers))
     table.setHorizontalHeaderLabels(list(headers))
@@ -23,6 +27,10 @@ def fill_table(table: QTableWidget, headers: Sequence[str], rows: Sequence[Seque
                 item.setTextAlignment(Qt.AlignCenter)
             table.setItem(r, c, item)
 
-    table.resizeColumnsToContents()
+    if old_widths and len(old_widths) == len(headers):
+        for i, w in enumerate(old_widths):
+            table.setColumnWidth(i, w)
+    else:
+        table.resizeColumnsToContents()
     table.resizeRowsToContents()
     table.setSortingEnabled(was_sorting_enabled)

@@ -35,6 +35,17 @@ QLineEdit:focus, QComboBox:focus, QTextEdit:focus, QDateEdit:focus {
   border: 1px solid #2d7ff9;
 }
 
+QLineEdit[compact="true"], QComboBox[compact="true"], QDateEdit[compact="true"], QTextEdit[compact="true"] {
+  min-height: 24px;
+  padding: 3px 6px;
+}
+
+QPushButton[compact="true"] {
+  min-height: 26px;
+  padding: 4px 8px;
+}
+
+
 QPushButton {
   border: 1px solid #cfd8e3;
   border-radius: 8px;

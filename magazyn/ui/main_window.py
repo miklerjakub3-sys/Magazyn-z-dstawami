@@ -41,6 +41,7 @@ class MainWindow(QMainWindow):
         self._build_layout()
         self._build_menu()
         self._apply_theme()
+        self.showMaximized()
 
         backup_manager.start_auto_backup()
 

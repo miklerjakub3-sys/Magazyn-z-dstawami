@@ -304,17 +304,55 @@ def get_device(device_id):
         return cur.fetchone()
 
 
-def search_devices(query="", item_type="all", order_by="received_date", order_dir="DESC", limit=1000, offset=0):
+def search_devices(
+    query="",
+    item_type="all",
+    date_from="",
+    date_to="",
+    order_by="received_date",
+    order_dir="DESC",
+    limit=1000,
+    offset=0,
+):
     """Wyszukiwanie urządzeń ze stronicowaniem"""
     q = (query or "").strip()
     t = (item_type or "all").strip()
 
-    allowed_order = {"received_date": "received_date", "created_at": "created_at", "id": "id"}
+    allowed_order = {
+        "received_date": "received_date",
+        "created_at": "created_at",
+        "id": "id",
+        "item_type": "item_type",
+        "device_name": "device_name",
+        "serial_number": "serial_number",
+        "imei1": "imei1",
+        "imei2": "imei2",
+        "production_code": "production_code",
+        "delivery_id": "delivery_id",
+        "notes": "notes",
+    }
     ob = allowed_order.get(order_by, "received_date")
     od = "DESC" if (order_dir or "").upper() == "DESC" else "ASC"
 
+    df = (date_from or "").strip()
+    dt = (date_to or "").strip()
+
     where = []
     params = []
+
+    if df and dt:
+        validate_ymd(df)
+        validate_ymd(dt)
+        where.append("received_date BETWEEN ? AND ?")
+        params.extend([df, dt])
+    elif df:
+        validate_ymd(df)
+        where.append("received_date >= ?")
+        params.append(df)
+    elif dt:
+        validate_ymd(dt)
+        where.append("received_date <= ?")
+        params.append(dt)
 
     if t in ("device", "accessory"):
         where.append("item_type = ?")
@@ -359,17 +397,27 @@ def search_devices(query="", item_type="all", order_by="received_date", order_di
 
 
 def get_devices_by_date_range(date_from, date_to, item_type="all"):
-    """Pobieranie urządzeń z zakresu dat"""
+    """Pobieranie urządzeń z opcjonalnego zakresu dat"""
     df = (date_from or "").strip()
     dt = (date_to or "").strip()
-    if not df or not dt:
-        raise ValueError("Podaj zakres dat: od i do (YYYY-MM-DD).")
-    validate_ymd(df)
-    validate_ymd(dt)
 
     t = (item_type or "all").strip()
-    where = ["received_date BETWEEN ? AND ?"]
-    params = [df, dt]
+    where = []
+    params = []
+
+    if df and dt:
+        validate_ymd(df)
+        validate_ymd(dt)
+        where.append("received_date BETWEEN ? AND ?")
+        params.extend([df, dt])
+    elif df:
+        validate_ymd(df)
+        where.append("received_date >= ?")
+        params.append(df)
+    elif dt:
+        validate_ymd(dt)
+        where.append("received_date <= ?")
+        params.append(dt)
     if t in ("device", "accessory"):
         where.append("item_type = ?")
         params.append(t)
@@ -380,7 +428,7 @@ def get_devices_by_date_range(date_from, date_to, item_type="all"):
             SELECT id, received_date, item_type, device_name, serial_number,
                    imei1, imei2, production_code, notes, created_at, delivery_id
             FROM devices
-            WHERE {" AND ".join(where)}
+            {"WHERE " + " AND ".join(where) if where else ""}
             ORDER BY received_date ASC, id ASC
             LIMIT 10000
         """, params)
@@ -543,7 +591,17 @@ def get_delivery(delivery_id: int):
         return cur.fetchone()
 
 
-def search_deliveries(date_from="", date_to="", sender="", courier="", delivery_type="", limit=1000, offset=0):
+def search_deliveries(
+    date_from="",
+    date_to="",
+    sender="",
+    courier="",
+    delivery_type="",
+    order_by="delivery_date",
+    order_dir="DESC",
+    limit=1000,
+    offset=0,
+):
     """Wyszukiwanie dostaw ze stronicowaniem"""
     where = []
     params = []
@@ -559,8 +617,14 @@ def search_deliveries(date_from="", date_to="", sender="", courier="", delivery_
         validate_ymd(dt)
         where.append("delivery_date BETWEEN ? AND ?")
         params.extend([df, dt])
-    elif df or dt:
-        raise ValueError("Podaj oba pola zakresu dat (od i do) albo zostaw puste.")
+    elif df:
+        validate_ymd(df)
+        where.append("delivery_date >= ?")
+        params.append(df)
+    elif dt:
+        validate_ymd(dt)
+        where.append("delivery_date <= ?")
+        params.append(dt)
 
     if sender:
         where.append("COALESCE(sender_name,'') = ?")
@@ -575,6 +639,20 @@ def search_deliveries(date_from="", date_to="", sender="", courier="", delivery_
             raise ValueError("Nieprawidłowy typ dostawy.")
         where.append("delivery_type = ?")
         params.append(delivery_type)
+
+    allowed_order = {
+        "delivery_date": "delivery_date",
+        "sender_name": "sender_name",
+        "courier_name": "courier_name",
+        "delivery_type": "delivery_type",
+        "tracking_number": "tracking_number",
+        "invoice_vat": "invoice_vat",
+        "notes": "notes",
+        "created_at": "created_at",
+        "id": "id",
+    }
+    ob = allowed_order.get(order_by, "delivery_date")
+    od = "DESC" if (order_dir or "").upper() == "DESC" else "ASC"
 
     where_sql = "WHERE " + " AND ".join(where) if where else ""
 
@@ -591,7 +669,7 @@ def search_deliveries(date_from="", date_to="", sender="", courier="", delivery_
                    tracking_number, invoice_vat, notes, created_at
             FROM deliveries
             {where_sql}
-            ORDER BY delivery_date DESC, id DESC
+            ORDER BY {ob} {od}, id DESC
             LIMIT ? OFFSET ?
         """, params + [limit, offset])
         
@@ -601,16 +679,27 @@ def search_deliveries(date_from="", date_to="", sender="", courier="", delivery_
 
 
 def get_deliveries_by_date_range(date_from, date_to, delivery_type=""):
-    """Pobieranie dostaw z zakresu dat"""
+    """Pobieranie dostaw z opcjonalnego zakresu dat"""
     df = (date_from or "").strip()
     dt = (date_to or "").strip()
-    if not df or not dt:
-        raise ValueError("Podaj zakres dat: od i do (YYYY-MM-DD).")
-    validate_ymd(df)
-    validate_ymd(dt)
 
-    where = ["delivery_date BETWEEN ? AND ?"]
-    params = [df, dt]
+    where = []
+    params = []
+
+    if df and dt:
+        validate_ymd(df)
+        validate_ymd(dt)
+        where.append("delivery_date BETWEEN ? AND ?")
+        params.extend([df, dt])
+    elif df:
+        validate_ymd(df)
+        where.append("delivery_date >= ?")
+        params.append(df)
+    elif dt:
+        validate_ymd(dt)
+        where.append("delivery_date <= ?")
+        params.append(dt)
+
     if delivery_type:
         if delivery_type not in DELIVERY_TYPES:
             raise ValueError("Nieprawidłowy typ dostawy.")
@@ -620,10 +709,10 @@ def get_deliveries_by_date_range(date_from, date_to, delivery_type=""):
     with get_conn() as conn:
         cur = conn.cursor()
         cur.execute(f"""
-            SELECT id, delivery_date, sender_name, courier_name, delivery_type, 
+            SELECT id, delivery_date, sender_name, courier_name, delivery_type,
                    tracking_number, invoice_vat, notes, created_at
             FROM deliveries
-            WHERE {" AND ".join(where)}
+            {"WHERE " + " AND ".join(where) if where else ""}
             ORDER BY delivery_date ASC, id ASC
             LIMIT 10000
         """, params)

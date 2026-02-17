@@ -34,6 +34,8 @@ class BackupManager:
         self.db_path = Path(DB_PATH)
         self.running = False
         self.thread: Optional[threading.Thread] = None
+        self._stop_event = threading.Event()
+        self.interval_seconds = int(AUTO_BACKUP_INTERVAL)
 
     def create_backup(self, manual: bool = False) -> Optional[str]:
         """Tworzy backup .zip (db + zdjęcia)."""
@@ -94,7 +96,9 @@ class BackupManager:
 
     def auto_backup_loop(self) -> None:
         while self.running:
-            time.sleep(AUTO_BACKUP_INTERVAL)
+            interrupted = self._stop_event.wait(max(30, int(self.interval_seconds)))
+            if interrupted:
+                break
             if self.running:
                 self.create_backup(manual=False)
 
@@ -102,13 +106,23 @@ class BackupManager:
         if self.running:
             return
         self.running = True
+        self._stop_event.clear()
         self.thread = threading.Thread(target=self.auto_backup_loop, daemon=True)
         self.thread.start()
 
     def stop_auto_backup(self) -> None:
         self.running = False
+        self._stop_event.set()
         if self.thread:
             self.thread.join(timeout=2)
+
+
+    def set_interval_seconds(self, seconds: int) -> None:
+        self.interval_seconds = max(30, int(seconds))
+        # restart pętli oczekiwania, żeby nowa wartość zadziałała od razu
+        if self.running:
+            self._stop_event.set()
+            self._stop_event.clear()
 
     def restore_backup(self, backup_path: str) -> bool:
         """Przywraca bazę + zdjęcia z backupu .zip"""

@@ -38,12 +38,23 @@ class MagazynService:
         self,
         query: str = "",
         item_type: str = "all",
+        date_from: str = "",
+        date_to: str = "",
         order_by: str = "received_date",
         order_dir: str = "DESC",
         limit: int = 100,
         offset: int = 0,
     ) -> PagedResult:
-        rows, total = database.search_devices(query, item_type, order_by, order_dir, limit, offset)
+        rows, total = database.search_devices(
+            query,
+            item_type,
+            date_from,
+            date_to,
+            order_by,
+            order_dir,
+            limit,
+            offset,
+        )
         return PagedResult(list(rows), int(total))
 
     def add_device(
@@ -88,10 +99,22 @@ class MagazynService:
         sender: str = "",
         courier: str = "",
         delivery_type: str = "",
+        order_by: str = "delivery_date",
+        order_dir: str = "DESC",
         limit: int = 100,
         offset: int = 0,
     ) -> PagedResult:
-        rows, total = database.search_deliveries(date_from, date_to, sender, courier, delivery_type, limit, offset)
+        rows, total = database.search_deliveries(
+            date_from,
+            date_to,
+            sender,
+            courier,
+            delivery_type,
+            order_by,
+            order_dir,
+            limit,
+            offset,
+        )
         return PagedResult(list(rows), int(total))
 
     def add_delivery(self, *args, **kwargs) -> int:

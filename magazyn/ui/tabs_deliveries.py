@@ -31,7 +31,7 @@ from ..config import DELIVERY_TYPES, ITEM_TYPE_TO_LABEL, MAX_RESULTS_PER_PAGE
 from ..utils import today_str, validate_ymd, one_line
 from ..log import get_logger
 from ..services import MagazynService
-from ..utils import one_line, today_str, validate_ymd
+from ..utils import one_line, validate_ymd
 from .attachments_widget import AttachmentGalleryWidget
 from .widgets import fill_table
 
@@ -217,7 +217,11 @@ class DeliveriesTab(QWidget):
     def _build(self) -> None:
         root = QVBoxLayout(self)
 
+        root.setContentsMargins(8, 8, 8, 8)
+        root.setSpacing(6)
+
         filt = QHBoxLayout()
+        filt.setSpacing(6)
         root.addLayout(filt)
         self.f_from = _make_optional_date_edit()
         self.f_to = _make_optional_date_edit()
@@ -226,6 +230,9 @@ class DeliveriesTab(QWidget):
         self.btn_search = QPushButton("Szukaj")
         self.btn_clear = QPushButton("Wyczyść")
         self.btn_export = QPushButton("Eksport CSV…")
+
+        for w in (self.f_from, self.f_to, self.f_type, self.btn_search, self.btn_clear, self.btn_export):
+            w.setProperty("compact", True)
 
         filt.addWidget(QLabel("Od:"))
         filt.addWidget(self.f_from)
@@ -304,13 +311,18 @@ class DeliveriesTab(QWidget):
         right_l.addWidget(self.attachments, 1)
 
         split.addWidget(right)
+        split.setStretchFactor(0, 5)
+        split.setStretchFactor(1, 1)
         split.setSizes([1360, 280])
+        right.setMinimumWidth(260)
 
         form_card = QFrame()
         form_card.setProperty("card", True)
         form_row = QHBoxLayout(form_card)
         form_row.setContentsMargins(12, 10, 12, 10)
         main_split.addWidget(form_card)
+        main_split.setStretchFactor(0, 6)
+        main_split.setStretchFactor(1, 1)
         main_split.setSizes([920, 120])
 
         form = QFormLayout()
@@ -319,7 +331,7 @@ class DeliveriesTab(QWidget):
         self.in_date = QDateEdit()
         self.in_date.setCalendarPopup(True)
         self.in_date.setDisplayFormat("yyyy-MM-dd")
-        self.in_date.setDate(QDate.fromString(today_str(), "yyyy-MM-dd"))
+        self.in_date.setDate(QDate.currentDate())
 
         self.in_sender = QComboBox()
         self.in_sender.setEditable(True)
@@ -332,7 +344,7 @@ class DeliveriesTab(QWidget):
         self.in_notes = QLineEdit()
 
         for w in (self.in_date, self.in_sender, self.in_courier, self.in_type, self.in_tracking, self.in_notes):
-            w.setMaximumHeight(28)
+            w.setProperty("compact", True)
 
         form.addRow("Data", self.in_date)
         form.addRow("Nadawca", self.in_sender)
@@ -352,6 +364,9 @@ class DeliveriesTab(QWidget):
         self.btn_del.setProperty("role", "danger")
         self.btn_link = QPushButton("Powiąż przyjęcia…")
         self.btn_clear_form = QPushButton("Wyczyść formularz")
+
+        for b in (self.btn_add, self.btn_save, self.btn_del, self.btn_link, self.btn_clear_form):
+            b.setProperty("compact", True)
 
         btns.addWidget(self.btn_add)
         btns.addWidget(self.btn_save)
@@ -436,7 +451,7 @@ class DeliveriesTab(QWidget):
         self.refresh()
 
     def clear_form(self) -> None:
-        self.in_date.setDate(QDate.fromString(today_str(), "yyyy-MM-dd"))
+        self.in_date.setDate(QDate.currentDate())
         self.in_sender.setCurrentText("")
         self.in_courier.setCurrentText("")
         self.in_type.setCurrentIndex(0)

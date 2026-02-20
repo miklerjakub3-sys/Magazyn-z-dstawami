@@ -11,20 +11,36 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
 )
 
+from .splash import get_logo_pixmap
+
 
 class LoginDialog(QDialog):
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
         self.setWindowTitle("Logowanie")
         self.setModal(True)
-        self.resize(420, 220)
+        self.resize(560, 320)
 
         root = QVBoxLayout(self)
-        title = QLabel("Zaloguj się do programu")
+        root.setContentsMargins(28, 24, 28, 24)
+        root.setSpacing(10)
+
+        logo = QLabel()
+        pm = get_logo_pixmap(height=88)
+        if not pm.isNull():
+            logo.setPixmap(pm)
+        root.addWidget(logo)
+
+        title = QLabel("Magazyn z dostawami")
         title.setProperty("title", True)
         root.addWidget(title)
 
+        subtitle = QLabel("Logowanie")
+        subtitle.setProperty("subtitle", True)
+        root.addWidget(subtitle)
+
         form = QFormLayout()
+        form.setHorizontalSpacing(10)
         self.in_login = QLineEdit()
         self.in_login.setPlaceholderText("Login")
         self.in_password = QLineEdit()

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
-from PySide6.QtWidgets import QApplication
+from PySide6.QtWidgets import QApplication, QDialog
 
 from magazyn.services import MagazynService
 from magazyn.log import install_excepthook, get_logger
@@ -39,10 +39,12 @@ def main() -> int:
             user = None
 
     if not user:
+        # Najpierw pokaż splash, potem przejdź do logowania (bez chowania pod splash screen).
+        splash.close()
+        app.processEvents()
         login_dialog = LoginDialog()
         while True:
-            if login_dialog.exec() != login_dialog.Accepted:
-                splash.close()
+            if login_dialog.exec() != QDialog.DialogCode.Accepted:
                 return 0
             login, password, remember = login_dialog.credentials()
             user = svc.authenticate_user(login, password)
@@ -62,7 +64,8 @@ def main() -> int:
     win = MainWindow(svc)
     win.show()
 
-    splash.finish(win)
+    if splash.isVisible():
+        splash.finish(win)
     return app.exec()
 
 if __name__ == "__main__":

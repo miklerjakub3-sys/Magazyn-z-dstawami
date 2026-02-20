@@ -20,7 +20,6 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from ..backup import backup_manager
 from ..config import BACKUP_DIR, DB_PATH, BACKUP_ZIP_PASSWORD, MAIN_ADMIN_PASSWORD
 from ..services import MagazynService
 
@@ -202,7 +201,7 @@ class SettingsPage(QWidget):
             self.btn_user_add.setToolTip("Brak uprawnienia: users.manage")
 
     def _sync_interval_combo(self) -> None:
-        sec = int(getattr(backup_manager, "interval_seconds", 30 * 60))
+        sec = int(self.svc.get_backup_interval_seconds())
         best_idx = 1
         for i in range(self.cmb_interval.count()):
             if int(self.cmb_interval.itemData(i)) == sec:
@@ -212,18 +211,30 @@ class SettingsPage(QWidget):
 
     def apply_interval(self) -> None:
         seconds = int(self.cmb_interval.currentData())
-        backup_manager.set_interval_seconds(seconds)
+        try:
+            self.svc.set_backup_interval_seconds(seconds)
+        except PermissionError:
+            QMessageBox.warning(self, "Backup", "Brak uprawnienia: backup.manage")
+            return
         QMessageBox.information(self, "Backup", f"Ustawiono autozapis co {seconds // 60} minut.")
 
     def refresh_backups(self) -> None:
         self.lst_backups.clear()
-        for name, path, size in backup_manager.list_backups():
+        try:
+            rows = self.svc.list_backups()
+        except PermissionError:
+            rows = []
+        for name, path, size in rows:
             mb = size / (1024 * 1024)
             dt = datetime.fromtimestamp(os.path.getmtime(path)).strftime("%Y-%m-%d %H:%M:%S")
             self.lst_backups.addItem(f"{name} | {mb:.2f} MB | {dt} | {path}")
 
     def create_backup(self) -> None:
-        path = backup_manager.create_backup(manual=True)
+        try:
+            path = self.svc.create_backup(manual=True)
+        except PermissionError:
+            QMessageBox.warning(self, "Backup", "Brak uprawnienia: backup.manage")
+            return
         if path:
             QMessageBox.information(self, "Backup", f"Utworzono backup (hasło ZIP aktywne):\n{path}")
             self.refresh_backups()
@@ -250,7 +261,12 @@ class SettingsPage(QWidget):
             return
 
         entered_password = password.text().strip() or BACKUP_ZIP_PASSWORD
-        if backup_manager.restore_backup(path, password=entered_password):
+        try:
+            ok = self.svc.restore_backup(path, password=entered_password)
+        except PermissionError:
+            QMessageBox.warning(self, "Backup", "Brak uprawnienia: backup.manage")
+            return
+        if ok:
             QMessageBox.information(self, "Backup", "Przywrócono backup. Dla pewności uruchom aplikację ponownie.")
         else:
             QMessageBox.critical(self, "Backup", "Nie udało się przywrócić backupu (sprawdź hasło ZIP).")

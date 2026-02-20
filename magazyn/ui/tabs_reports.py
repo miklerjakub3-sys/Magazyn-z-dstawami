@@ -20,7 +20,6 @@ from PySide6.QtWidgets import (
 )
 
 from ..config import DELIVERY_TYPES
-from ..database import get_deliveries_by_date_range, get_devices_by_date_range
 from ..log import get_logger
 from ..pdf_export import PDF_AVAILABLE, export_deliveries_to_pdf, export_devices_to_pdf
 from ..services import MagazynService
@@ -137,7 +136,7 @@ class ReportsTab(QWidget):
             if self.rb_receipts.isChecked():
                 ftype = self.in_receipt_type.currentText()
                 item_type = {"Wszystkie": "all", "Urządzenie": "device", "Akcesorium": "accessory"}.get(ftype, "all")
-                rows = get_devices_by_date_range(df, dt, item_type)
+                rows = self.svc.get_devices_report_rows(df, dt, item_type)
                 if not rows:
                     QMessageBox.information(self, "Info", "Brak danych w tym zakresie.")
                     return
@@ -148,7 +147,7 @@ class ReportsTab(QWidget):
                 QMessageBox.information(self, "OK", f"Zapisano: {path}")
             else:
                 dtype = self.in_delivery_type.currentText().strip()
-                rows = get_deliveries_by_date_range(df, dt, dtype)
+                rows = self.svc.get_deliveries_report_rows(df, dt, dtype)
                 if not rows:
                     QMessageBox.information(self, "Info", "Brak danych w tym zakresie.")
                     return

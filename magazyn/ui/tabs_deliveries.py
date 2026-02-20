@@ -555,6 +555,10 @@ class DeliveriesTab(QWidget):
 
         try:
             row = self.svc.get_delivery(did)
+        except PermissionError as e:
+            QMessageBox.warning(self, "Brak uprawnień", str(e))
+            return
+        try:
             if not row:
                 return
             (_id, d, sender, courier, dtype, tracking, vat, notes, _created) = row
@@ -604,6 +608,8 @@ class DeliveriesTab(QWidget):
             self.refresh_lists()
             self.refresh()
             QMessageBox.information(self, "OK", f"Dodano dostawę ID={new_id}")
+        except PermissionError as e:
+            QMessageBox.warning(self, "Brak uprawnień", str(e))
         except Exception as e:
             log.exception("add delivery")
             QMessageBox.critical(self, "Błąd", str(e))
@@ -628,6 +634,8 @@ class DeliveriesTab(QWidget):
             )
             self.refresh()
             QMessageBox.information(self, "OK", "Zapisano zmiany.")
+        except PermissionError as e:
+            QMessageBox.warning(self, "Brak uprawnień", str(e))
         except Exception as e:
             log.exception("save delivery")
             QMessageBox.critical(self, "Błąd", str(e))
@@ -642,6 +650,8 @@ class DeliveriesTab(QWidget):
         try:
             self.svc.delete_delivery(did)
             self.refresh()
+        except PermissionError as e:
+            QMessageBox.warning(self, "Brak uprawnień", str(e))
         except Exception as e:
             log.exception("delete delivery")
             QMessageBox.critical(self, "Błąd", str(e))
@@ -651,7 +661,11 @@ class DeliveriesTab(QWidget):
         if not did:
             QMessageBox.information(self, "Info", "Zaznacz dostawę.")
             return
-        row = self.svc.get_delivery(did)
+        try:
+            row = self.svc.get_delivery(did)
+        except PermissionError as e:
+            QMessageBox.warning(self, "Brak uprawnień", str(e))
+            return
         if not row:
             return
         delivery_date = row[1] or ""
@@ -671,6 +685,8 @@ class DeliveriesTab(QWidget):
         for p in paths:
             try:
                 self.svc.add_delivery_attachment(did, p)
+            except PermissionError as e:
+                errors.append(f"{p}: {e}")
             except Exception as e:
                 errors.append(f"{p}: {e}")
         if errors:
@@ -694,6 +710,8 @@ class DeliveriesTab(QWidget):
             self.svc.delete_delivery_attachment(int(att_id), delete_file=True)
             self.load_selected()
             self._update_context_actions()
+        except PermissionError as e:
+            QMessageBox.warning(self, "Brak uprawnień", str(e))
         except Exception as e:
             log.exception("delete attachment")
             QMessageBox.critical(self, "Błąd", str(e))

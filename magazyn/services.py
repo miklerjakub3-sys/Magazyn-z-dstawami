@@ -11,10 +11,16 @@ Cel:
 from __future__ import annotations
 
 from dataclasses import dataclass
+import hashlib
+import secrets
+import smtplib
+from datetime import datetime, timedelta
+from email.message import EmailMessage
 from typing import List, Optional, Tuple, Sequence, Any
 
 from . import database
 from .backup import backup_manager
+from .config import MAIN_ADMIN_LOGIN, RESET_CODE_TTL_MINUTES, SMTP_FROM, SMTP_HOST, SMTP_PASSWORD, SMTP_PORT, SMTP_USERNAME, SMTP_USE_TLS
 from .log import get_logger
 
 log = get_logger("magazyn.services")
@@ -122,6 +128,54 @@ class MagazynService:
     def get_deliveries_report_rows(self, date_from: str = "", date_to: str = "", delivery_type: str = ""):
         self._require("reports.export")
         return database.get_deliveries_by_date_range(date_from, date_to, delivery_type)
+
+
+    def set_admin_recovery_email(self, email: str) -> None:
+        self._require("users.manage")
+        database.set_admin_recovery_email(MAIN_ADMIN_LOGIN, email)
+
+    def get_admin_recovery_email(self) -> str:
+        self._require("users.manage")
+        return database.get_admin_recovery_email(MAIN_ADMIN_LOGIN)
+
+    def send_admin_reset_code(self, email: str) -> None:
+        code = f"{secrets.randbelow(1000000):06d}"
+        code_hash = hashlib.sha256(code.encode("utf-8")).hexdigest()
+        exp = (datetime.now() + timedelta(minutes=max(5, int(RESET_CODE_TTL_MINUTES)))).strftime("%Y-%m-%d %H:%M:%S")
+        ok = database.set_password_reset_code(MAIN_ADMIN_LOGIN, email, code_hash, exp)
+        if not ok:
+            raise ValueError("Podany e-mail nie jest przypisany do konta administratora.")
+
+        if not SMTP_HOST or not SMTP_FROM:
+            raise RuntimeError("SMTP nie jest skonfigurowane. Uzupełnij zmienne MAGAZYN_SMTP_*.")
+
+        msg = EmailMessage()
+        msg["Subject"] = "Magazyn – kod odzyskiwania hasła administratora"
+        msg["From"] = SMTP_FROM
+        msg["To"] = email
+        msg.set_content(
+            "Kod odzyskiwania hasła administratora: "
+            + code
+            + "\nKod jest ważny przez "
+            + str(max(5, int(RESET_CODE_TTL_MINUTES)))
+            + " minut."
+        )
+
+        with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=20) as smtp:
+            if SMTP_USE_TLS:
+                smtp.starttls()
+            if SMTP_USERNAME:
+                smtp.login(SMTP_USERNAME, SMTP_PASSWORD)
+            smtp.send_message(msg)
+
+    def reset_admin_password_with_code(self, email: str, code: str, new_password: str) -> None:
+        if len((new_password or "").strip()) < 8:
+            raise ValueError("Nowe hasło musi mieć co najmniej 8 znaków.")
+        code_hash = hashlib.sha256((code or "").strip().encode("utf-8")).hexdigest()
+        packed = database._password_hash(new_password)
+        ok = database.consume_password_reset_code(MAIN_ADMIN_LOGIN, email, code_hash, packed)
+        if not ok:
+            raise ValueError("Kod jest nieprawidłowy lub wygasł.")
 
     # --- Devices ---
     def search_devices(

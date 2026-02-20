@@ -20,6 +20,9 @@ def main() -> int:
     ensure_dirs()
 
     app = QApplication(sys.argv)
+    qss = Path(__file__).resolve().parent / "magazyn" / "ui" / "styles" / "app.qss"
+    if qss.exists():
+        app.setStyleSheet(qss.read_text(encoding="utf-8"))
 
     splash = make_splash()
     splash.show()
@@ -40,7 +43,7 @@ def main() -> int:
         # Najpierw pokaż splash, potem przejdź do logowania (bez chowania pod splash screen).
         splash.close()
         app.processEvents()
-        login_dialog = LoginDialog()
+        login_dialog = LoginDialog(svc)
         while True:
             if login_dialog.exec() != QDialog.DialogCode.Accepted:
                 return 0

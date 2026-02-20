@@ -128,6 +128,9 @@ def init_db():
                 password_hash TEXT NOT NULL,
                 role_id INTEGER NOT NULL,
                 is_active INTEGER NOT NULL DEFAULT 1,
+                recovery_email TEXT,
+                reset_code_hash TEXT,
+                reset_code_expires TEXT,
                 created_at TEXT NOT NULL,
                 updated_at TEXT,
                 FOREIGN KEY(role_id) REFERENCES app_roles(id)
@@ -421,6 +424,59 @@ def set_user_role(user_id: int, role_id: int) -> None:
         conn.commit()
 
 
+def set_admin_recovery_email(login: str, email: str) -> None:
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    with get_conn() as conn:
+        conn.execute(
+            "UPDATE app_users SET recovery_email=?, updated_at=? WHERE LOWER(login)=LOWER(?)",
+            ((email or "").strip(), now, (login or "").strip()),
+        )
+        conn.commit()
+
+
+def get_admin_recovery_email(login: str) -> str:
+    with get_conn() as conn:
+        cur = conn.cursor()
+        cur.execute("SELECT COALESCE(recovery_email,'') FROM app_users WHERE LOWER(login)=LOWER(?)", ((login or "").strip(),))
+        row = cur.fetchone()
+        return str(row[0]) if row else ""
+
+
+def set_password_reset_code(login: str, email: str, code_hash: str, expires_at: str) -> bool:
+    with get_conn() as conn:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            UPDATE app_users
+            SET reset_code_hash=?, reset_code_expires=?
+            WHERE LOWER(login)=LOWER(?) AND LOWER(COALESCE(recovery_email,''))=LOWER(?) AND is_active=1
+            """,
+            (code_hash, expires_at, (login or "").strip(), (email or "").strip()),
+        )
+        conn.commit()
+        return cur.rowcount > 0
+
+
+def consume_password_reset_code(login: str, email: str, code_hash: str, new_password_hash: str) -> bool:
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    with get_conn() as conn:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            UPDATE app_users
+            SET password_hash=?, reset_code_hash=NULL, reset_code_expires=NULL, updated_at=?
+            WHERE LOWER(login)=LOWER(?)
+              AND LOWER(COALESCE(recovery_email,''))=LOWER(?)
+              AND COALESCE(reset_code_hash,'')=?
+              AND COALESCE(reset_code_expires,'')>=?
+              AND is_active=1
+            """,
+            (new_password_hash, now, (login or "").strip(), (email or "").strip(), code_hash, now),
+        )
+        conn.commit()
+        return cur.rowcount > 0
+
+
 def migrate_db():
     """Migracje bazy danych"""
     with get_conn() as conn:
@@ -474,6 +530,22 @@ def migrate_db():
                     get_logger("magazyn.db").exception(f"Nie można dodać kolumny {col}")
 
         conn.commit()
+
+        # App users
+        cur.execute("PRAGMA table_info(app_users)")
+        ucols = {row[1] for row in cur.fetchall()}
+        u_needed = {
+            "recovery_email": "TEXT",
+            "reset_code_hash": "TEXT",
+            "reset_code_expires": "TEXT",
+        }
+        for col, coltype in u_needed.items():
+            if col not in ucols:
+                try:
+                    cur.execute(f"ALTER TABLE app_users ADD COLUMN {col} {coltype}")
+                except Exception:
+                    from .log import get_logger
+                    get_logger("magazyn.db").exception(f"Nie można dodać kolumny {col}")
 
 
 # =======================

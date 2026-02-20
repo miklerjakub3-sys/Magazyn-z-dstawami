@@ -165,6 +165,16 @@ class SettingsPage(QWidget):
         self.perm_grid.setVerticalSpacing(6)
         users_l.addWidget(self.perm_wrap)
 
+        recovery_row = QHBoxLayout()
+        recovery_row.addWidget(QLabel("E-mail odzyskiwania admina:"))
+        self.in_admin_recovery_email = QLineEdit()
+        self.in_admin_recovery_email.setPlaceholderText("admin@twojadomena.pl")
+        self.btn_save_recovery_email = QPushButton("Zapisz e-mail")
+        self.btn_save_recovery_email.setProperty("role", "secondary")
+        recovery_row.addWidget(self.in_admin_recovery_email, 1)
+        recovery_row.addWidget(self.btn_save_recovery_email)
+        users_l.addLayout(recovery_row)
+
         main_grid.addWidget(backup_card, 0, 0)
         main_grid.addWidget(users_card, 0, 1)
         main_grid.setColumnStretch(0, 1)
@@ -179,12 +189,20 @@ class SettingsPage(QWidget):
         self.btn_users_refresh.clicked.connect(self.refresh_users)
         self.btn_user_add.clicked.connect(self.add_user)
         self.btn_user_save.clicked.connect(self.save_selected_user_role_and_permissions)
+        self.btn_save_recovery_email.clicked.connect(self.save_admin_recovery_email)
         self.lst_users.currentRowChanged.connect(self.refresh_permission_checks)
 
         self._sync_interval_combo()
         self.refresh_backups()
         self.refresh_users()
+        self._load_admin_recovery_email()
         self._apply_permissions()
+
+    def _load_admin_recovery_email(self) -> None:
+        try:
+            self.in_admin_recovery_email.setText(self.svc.get_admin_recovery_email())
+        except Exception:
+            self.in_admin_recovery_email.setText("")
 
     def _apply_permissions(self) -> None:
         can_backup = bool(self.svc.has_permission("backup.manage"))
@@ -197,6 +215,8 @@ class SettingsPage(QWidget):
             btn.setEnabled(can_users)
         self.lst_users.setEnabled(can_users)
         self.cmb_user_role.setEnabled(can_users)
+        self.in_admin_recovery_email.setEnabled(can_users)
+        self.btn_save_recovery_email.setEnabled(can_users)
         if not can_users:
             self.btn_user_add.setToolTip("Brak uprawnienia: users.manage")
 
@@ -370,3 +390,17 @@ class SettingsPage(QWidget):
         self.svc.update_role_permissions(role_id, selected_keys)
         QMessageBox.information(self, "Użytkownicy", "Zapisano rolę i uprawnienia.")
         self.refresh_users()
+
+    def save_admin_recovery_email(self) -> None:
+        email = self.in_admin_recovery_email.text().strip()
+        if "@" not in email or "." not in email:
+            QMessageBox.warning(self, "Użytkownicy", "Podaj poprawny adres e-mail.")
+            return
+        try:
+            self.svc.set_admin_recovery_email(email)
+            QMessageBox.information(self, "Użytkownicy", "Zapisano e-mail odzyskiwania administratora.")
+            self._load_admin_recovery_email()
+        except PermissionError:
+            QMessageBox.warning(self, "Użytkownicy", "Brak uprawnienia: users.manage")
+        except Exception as e:
+            QMessageBox.critical(self, "Użytkownicy", str(e))

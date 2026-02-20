@@ -33,6 +33,31 @@ class MagazynService:
     def init_db(self) -> None:
         database.init_db()
 
+    # --- Auth / users ---
+    def authenticate_user(self, login: str, password: str):
+        return database.authenticate_user(login, password)
+
+    def create_remember_token(self, user_id: int, days_valid: int = 30) -> str:
+        return database.create_remember_token(user_id, days_valid=days_valid)
+
+    def authenticate_token(self, token: str):
+        return database.authenticate_token(token)
+
+    def list_permissions(self):
+        return database.list_permissions()
+
+    def list_roles(self):
+        return database.list_roles()
+
+    def list_users(self):
+        return database.list_users()
+
+    def role_permission_keys(self, role_id: int):
+        return database.role_permission_keys(role_id)
+
+    def create_user(self, login: str, password: str, role_id: int) -> None:
+        database.create_user(login, password, role_id)
+
     # --- Devices ---
     def search_devices(
         self,

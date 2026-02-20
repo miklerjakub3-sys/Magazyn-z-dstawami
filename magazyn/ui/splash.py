@@ -29,6 +29,17 @@ def _resolve_logo_path(default_rel: str) -> str:
     return ""
 
 
+def get_logo_pixmap(
+    logo_rel_path: str = os.path.join("assets", "axedserwis.png"),
+    height: int = 90,
+) -> QPixmap:
+    logo_path = _resolve_logo_path(logo_rel_path)
+    logo = QPixmap(logo_path) if logo_path else QPixmap()
+    if logo.isNull():
+        return QPixmap()
+    return logo.scaledToHeight(height, Qt.SmoothTransformation)
+
+
 def make_splash(
     title: str = "Magazyn z dostawami",
     subtitle: str = "Uruchamianie…",
@@ -41,10 +52,8 @@ def make_splash(
     painter = QPainter(pm)
     painter.setRenderHint(QPainter.Antialiasing)
 
-    logo_path = _resolve_logo_path(logo_rel_path)
-    logo = QPixmap(logo_path) if logo_path else QPixmap()
-    if not logo.isNull():
-        scaled = logo.scaledToHeight(90, Qt.SmoothTransformation)
+    scaled = get_logo_pixmap(logo_rel_path=logo_rel_path, height=90)
+    if not scaled.isNull():
         painter.drawPixmap(30, 35, scaled)
 
     painter.setPen(QColor("#424242"))

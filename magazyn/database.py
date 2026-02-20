@@ -211,17 +211,41 @@ def seed_auth_defaults() -> None:
         cur = conn.cursor()
         for key, label in permissions:
             cur.execute("INSERT OR IGNORE INTO app_permissions(key, label) VALUES (?, ?)", (key, label))
-        cur.execute("INSERT OR IGNORE INTO app_roles(name, created_at) VALUES(?, ?)", ("Administrator", now))
+
+        for role_name in ("Administrator", "Gość", "Praktykant"):
+            cur.execute("INSERT OR IGNORE INTO app_roles(name, created_at) VALUES(?, ?)", (role_name, now))
+
+        cur.execute("SELECT id, key FROM app_permissions")
+        perm_map = {str(key): int(pid) for pid, key in cur.fetchall()}
+
         cur.execute("SELECT id FROM app_roles WHERE name=?", ("Administrator",))
         admin_role_id = int(cur.fetchone()[0])
-
-        cur.execute("SELECT id FROM app_permissions")
-        perm_ids = [int(r[0]) for r in cur.fetchall()]
-        for perm_id in perm_ids:
+        for perm_id in perm_map.values():
             cur.execute(
                 "INSERT OR IGNORE INTO app_role_permissions(role_id, permission_id) VALUES (?, ?)",
                 (admin_role_id, perm_id),
             )
+
+        # Role startowe, które później można dowolnie skonfigurować z Ustawień.
+        cur.execute("SELECT id FROM app_roles WHERE name=?", ("Gość",))
+        guest_role_id = int(cur.fetchone()[0])
+        for key in ("receipts.view", "deliveries.view"):
+            perm_id = perm_map.get(key)
+            if perm_id:
+                cur.execute(
+                    "INSERT OR IGNORE INTO app_role_permissions(role_id, permission_id) VALUES (?, ?)",
+                    (guest_role_id, perm_id),
+                )
+
+        cur.execute("SELECT id FROM app_roles WHERE name=?", ("Praktykant",))
+        trainee_role_id = int(cur.fetchone()[0])
+        for key in ("receipts.view", "receipts.edit", "deliveries.view"):
+            perm_id = perm_map.get(key)
+            if perm_id:
+                cur.execute(
+                    "INSERT OR IGNORE INTO app_role_permissions(role_id, permission_id) VALUES (?, ?)",
+                    (trainee_role_id, perm_id),
+                )
 
         cur.execute("SELECT COUNT(1) FROM app_users")
         if int(cur.fetchone()[0]) == 0:

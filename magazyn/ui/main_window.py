@@ -17,7 +17,6 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from ..backup import backup_manager
 from ..config import BACKUP_DIR, DB_PATH, VERSION
 from ..log import get_logger
 from ..services import MagazynService
@@ -43,7 +42,74 @@ class MainWindow(QMainWindow):
         self._apply_theme()
         self.showMaximized()
 
-        backup_manager.start_auto_backup()
+        if self.svc.has_permission("backup.manage"):
+            from ..backup import backup_manager
+            backup_manager.start_auto_backup()
+
+    def _build_layout(self) -> None:
+        shell = QWidget()
+        root = QHBoxLayout(shell)
+        root.setContentsMargins(0, 0, 0, 0)
+        root.setSpacing(0)
+
+        self.sidebar = SidebarNav()
+        self.sidebar.page_selected.connect(self.show_page)
+        root.addWidget(self.sidebar)
+
+        content = QWidget()
+        content_l = QVBoxLayout(content)
+        content_l.setContentsMargins(16, 12, 16, 16)
+        content_l.setSpacing(10)
+
+        header = QFrame()
+        header.setProperty("card", True)
+        header_l = QVBoxLayout(header)
+        header_l.setContentsMargins(16, 12, 16, 12)
+        self.lbl_title = QLabel("Pulpit")
+        self.lbl_title.setProperty("title", True)
+        self.lbl_breadcrumbs = QLabel("Start / Pulpit")
+        self.lbl_breadcrumbs.setProperty("subtitle", True)
+        header_l.addWidget(self.lbl_title)
+        header_l.addWidget(self.lbl_breadcrumbs)
+        content_l.addWidget(header)
+
+        self.stack = QStackedWidget()
+        self.pages = {
+            "dashboard": DashboardPage(self.svc),
+            "receipts": ReceiptsTab(self.svc),
+            "deliveries": DeliveriesTab(self.svc),
+            "reports": ReportsTab(self.svc),
+            "settings": SettingsPage(self.svc),
+        }
+        for key in ["dashboard", "receipts", "deliveries", "reports", "settings"]:
+            self.stack.addWidget(self.pages[key])
+
+        content_l.addWidget(self.stack, 1)
+        root.addWidget(content, 1)
+
+        self.setCentralWidget(shell)
+        self.show_page("dashboard")
+
+    def _apply_theme(self) -> None:
+        qss = Path(__file__).with_name("styles").joinpath("app.qss")
+        if qss.exists():
+            self.setStyleSheet(qss.read_text(encoding="utf-8"))
+
+    def show_page(self, key: str) -> None:
+        titles = {
+            "dashboard": "Pulpit",
+            "receipts": "Przyjęcia",
+            "deliveries": "Dostawy",
+            "reports": "Raporty",
+            "settings": "Ustawienia",
+        }
+        page = self.pages.get(key)
+        if not page:
+            return
+        self.stack.setCurrentWidget(page)
+        self.lbl_title.setText(titles.get(key, key))
+        self.lbl_breadcrumbs.setText(f"Start / {titles.get(key, key)}")
+        self.sidebar.set_active(key)
 
     def _build_layout(self) -> None:
         shell = QWidget()
@@ -133,11 +199,13 @@ class MainWindow(QMainWindow):
 
     def on_manual_backup(self) -> None:
         try:
-            path = backup_manager.create_backup(manual=True)
+            path = self.svc.create_backup(manual=True)
             if path:
                 QMessageBox.information(self, "Backup", f"Utworzono:\n{path}\n\nFolder: {BACKUP_DIR}")
             else:
                 QMessageBox.warning(self, "Backup", "Nie udało się utworzyć backupu.")
+        except PermissionError:
+            QMessageBox.warning(self, "Backup", "Brak uprawnienia: backup.manage")
         except Exception as e:
             log.exception("manual backup failed")
             QMessageBox.critical(self, "Błąd", str(e))
@@ -161,8 +229,10 @@ class MainWindow(QMainWindow):
         )
 
     def closeEvent(self, event):
+        from ..backup import backup_manager
         try:
-            backup_manager.create_backup(manual=True)
+            if self.svc.has_permission("backup.manage"):
+                backup_manager.create_backup(manual=True)
         except Exception:
             log.exception("Backup on close failed")
         finally:

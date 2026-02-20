@@ -14,6 +14,7 @@ from dataclasses import dataclass
 from typing import List, Optional, Tuple, Sequence, Any
 
 from . import database
+from .backup import backup_manager
 from .log import get_logger
 
 log = get_logger("magazyn.services")
@@ -93,6 +94,34 @@ class MagazynService:
     def set_user_role(self, user_id: int, role_id: int) -> None:
         self._require("users.manage")
         database.set_user_role(user_id, role_id)
+
+
+    def get_backup_interval_seconds(self) -> int:
+        return int(getattr(backup_manager, "interval_seconds", 30 * 60))
+
+    def set_backup_interval_seconds(self, seconds: int) -> None:
+        self._require("backup.manage")
+        backup_manager.set_interval_seconds(seconds)
+
+    def create_backup(self, manual: bool = True):
+        self._require("backup.manage")
+        return backup_manager.create_backup(manual=manual)
+
+    def list_backups(self):
+        self._require("backup.manage")
+        return backup_manager.list_backups()
+
+    def restore_backup(self, backup_path: str, password: str = "") -> bool:
+        self._require("backup.manage")
+        return bool(backup_manager.restore_backup(backup_path, password=password))
+
+    def get_devices_report_rows(self, date_from: str = "", date_to: str = "", item_type: str = "all"):
+        self._require("reports.export")
+        return database.get_devices_by_date_range(date_from, date_to, item_type)
+
+    def get_deliveries_report_rows(self, date_from: str = "", date_to: str = "", delivery_type: str = ""):
+        self._require("reports.export")
+        return database.get_deliveries_by_date_range(date_from, date_to, delivery_type)
 
     # --- Devices ---
     def search_devices(

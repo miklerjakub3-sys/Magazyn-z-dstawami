@@ -22,8 +22,13 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional, List, Tuple
 
-from .config import BACKUP_DIR, DB_PATH, AUTO_BACKUP_INTERVAL, ATTACH_DIR, DELIVERY_ATTACH_DIR
+from .config import BACKUP_DIR, DB_PATH, AUTO_BACKUP_INTERVAL, ATTACH_DIR, DELIVERY_ATTACH_DIR, BACKUP_ZIP_PASSWORD
 from .log import get_logger
+
+try:
+    import pyzipper  # type: ignore
+except Exception:  # pragma: no cover - fallback środowiskowy
+    pyzipper = None
 
 log = get_logger("magazyn.backup")
 
@@ -62,10 +67,23 @@ class BackupManager:
                     if p.is_file():
                         z.write(p, arcname=str(Path(arc_root) / p.relative_to(folder)))
 
-            with zipfile.ZipFile(backup_path, "w", compression=zipfile.ZIP_DEFLATED) as z:
-                z.write(tmp_gz, arcname="db/magazyn.db.gz")
-                add_dir(z, Path(ATTACH_DIR), "attachments")
-                add_dir(z, Path(DELIVERY_ATTACH_DIR), "delivery_attachments")
+            if pyzipper is not None:
+                with pyzipper.AESZipFile(
+                    backup_path,
+                    "w",
+                    compression=zipfile.ZIP_DEFLATED,
+                    encryption=pyzipper.WZ_AES,
+                ) as z:
+                    z.setpassword(BACKUP_ZIP_PASSWORD.encode("utf-8"))
+                    z.write(tmp_gz, arcname="db/magazyn.db.gz")
+                    add_dir(z, Path(ATTACH_DIR), "attachments")
+                    add_dir(z, Path(DELIVERY_ATTACH_DIR), "delivery_attachments")
+            else:
+                with zipfile.ZipFile(backup_path, "w", compression=zipfile.ZIP_DEFLATED) as z:
+                    z.setpassword(BACKUP_ZIP_PASSWORD.encode("utf-8"))
+                    z.write(tmp_gz, arcname="db/magazyn.db.gz")
+                    add_dir(z, Path(ATTACH_DIR), "attachments")
+                    add_dir(z, Path(DELIVERY_ATTACH_DIR), "delivery_attachments")
 
             try:
                 tmp_gz.unlink(missing_ok=True)
@@ -124,7 +142,7 @@ class BackupManager:
             self._stop_event.set()
             self._stop_event.clear()
 
-    def restore_backup(self, backup_path: str) -> bool:
+    def restore_backup(self, backup_path: str, password: str = "") -> bool:
         """Przywraca bazę + zdjęcia z backupu .zip"""
         try:
             bp = Path(backup_path)
@@ -138,8 +156,13 @@ class BackupManager:
             tmp_dir = self.backup_dir / f"_restore_tmp_{int(time.time())}"
             tmp_dir.mkdir(parents=True, exist_ok=True)
 
-            with zipfile.ZipFile(bp, "r") as z:
-                z.extractall(tmp_dir)
+            pwd = (password or BACKUP_ZIP_PASSWORD).encode("utf-8")
+            if pyzipper is not None:
+                with pyzipper.AESZipFile(bp, "r") as z:
+                    z.extractall(tmp_dir, pwd=pwd)
+            else:
+                with zipfile.ZipFile(bp, "r") as z:
+                    z.extractall(tmp_dir, pwd=pwd)
 
             # restore db
             gz = tmp_dir / "db" / "magazyn.db.gz"

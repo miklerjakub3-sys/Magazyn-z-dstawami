@@ -78,7 +78,7 @@ class MainWindow(QMainWindow):
             "receipts": ReceiptsTab(self.svc),
             "deliveries": DeliveriesTab(self.svc),
             "reports": ReportsTab(self.svc),
-            "settings": SettingsPage(),
+            "settings": SettingsPage(self.svc),
         }
         for key in ["dashboard", "receipts", "deliveries", "reports", "settings"]:
             self.stack.addWidget(self.pages[key])

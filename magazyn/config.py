@@ -33,6 +33,10 @@ MAX_RESULTS_PER_PAGE = 100
 # Backup
 # ======================
 AUTO_BACKUP_INTERVAL = 1800  # 30 minut (sekundy)
+BACKUP_ZIP_PASSWORD = "Mikler2000praca"
+MAIN_ADMIN_LOGIN = "Jakub"
+MAIN_ADMIN_PASSWORD = "Mikler2000praca"
+REMEMBER_TOKEN_FILE = APP_DIR / "remember_token.txt"
 
 # ======================
 # Typy pozycji (PRZYJĘCIA)

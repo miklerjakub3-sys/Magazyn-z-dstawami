@@ -454,6 +454,11 @@ class ReceiptsTab(QWidget):
         self.btn_next.clicked.connect(lambda: self._goto(min(self.total_pages - 1, self.page + 1)))
         self.btn_last.clicked.connect(lambda: self._goto(max(0, self.total_pages - 1)))
 
+        root.setStretch(0, 0)
+        root.setStretch(1, 0)
+        root.setStretch(2, 5)
+        root.setStretch(3, 0)
+
         self.apply_mode()
 
     def _apply_permissions(self) -> None:

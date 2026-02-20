@@ -30,13 +30,11 @@ def main() -> int:
 
     user = None
     token_file = Path(REMEMBER_TOKEN_FILE)
-    if token_file.exists():
-        try:
-            token = token_file.read_text(encoding="utf-8").strip()
-            if token:
-                user = svc.authenticate_token(token)
-        except Exception:
-            user = None
+    # Funkcja „zapamiętaj mnie” celowo wyłączona: zawsze wymagamy logowania.
+    try:
+        token_file.unlink(missing_ok=True)
+    except Exception:
+        pass
 
     if not user:
         # Najpierw pokaż splash, potem przejdź do logowania (bez chowania pod splash screen).
@@ -46,17 +44,9 @@ def main() -> int:
         while True:
             if login_dialog.exec() != QDialog.DialogCode.Accepted:
                 return 0
-            login, password, remember = login_dialog.credentials()
+            login, password, _remember = login_dialog.credentials()
             user = svc.authenticate_user(login, password)
             if user:
-                if remember:
-                    token = svc.create_remember_token(int(user["id"]))
-                    token_file.write_text(token, encoding="utf-8")
-                else:
-                    try:
-                        token_file.unlink(missing_ok=True)
-                    except Exception:
-                        pass
                 break
             login_dialog.in_password.clear()
             login_dialog.in_password.setFocus()

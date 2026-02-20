@@ -47,6 +47,8 @@ class LoginDialog(QDialog):
         self.in_password.setEchoMode(QLineEdit.Password)
         self.in_password.setPlaceholderText("Hasło")
         self.chk_remember = QCheckBox("Zapamiętaj mnie")
+        self.chk_remember.setEnabled(False)
+        self.chk_remember.setToolTip("Opcja tymczasowo wyłączona ze względów bezpieczeństwa.")
 
         form.addRow("Login:", self.in_login)
         form.addRow("Hasło:", self.in_password)

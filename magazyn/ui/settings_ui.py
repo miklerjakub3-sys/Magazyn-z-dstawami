@@ -21,7 +21,7 @@ from PySide6.QtWidgets import (
 )
 
 from ..backup import backup_manager
-from ..config import BACKUP_DIR, DB_PATH, BACKUP_ZIP_PASSWORD
+from ..config import BACKUP_DIR, DB_PATH, BACKUP_ZIP_PASSWORD, MAIN_ADMIN_PASSWORD
 from ..services import MagazynService
 
 
@@ -141,12 +141,22 @@ class SettingsPage(QWidget):
         user_buttons = QVBoxLayout()
         self.btn_users_refresh = QPushButton("Odśwież użytkowników")
         self.btn_user_add = QPushButton("Dodaj użytkownika")
+        self.btn_user_save = QPushButton("Zapisz rolę i uprawnienia")
+        self.btn_user_save.setProperty("role", "secondary")
         self.btn_user_add.setProperty("role", "primary")
         user_buttons.addWidget(self.btn_users_refresh)
         user_buttons.addWidget(self.btn_user_add)
+        user_buttons.addWidget(self.btn_user_save)
         user_buttons.addStretch(1)
         user_row.addLayout(user_buttons)
         users_l.addLayout(user_row)
+
+        role_row = QHBoxLayout()
+        role_row.addWidget(QLabel("Ranga użytkownika:"))
+        self.cmb_user_role = QComboBox()
+        role_row.addWidget(self.cmb_user_role)
+        role_row.addStretch(1)
+        users_l.addLayout(role_row)
 
         users_l.addWidget(QLabel("Uprawnienia roli (ptaszki):"))
         self.perm_wrap = QWidget()
@@ -169,11 +179,27 @@ class SettingsPage(QWidget):
         self.btn_apply_interval.clicked.connect(self.apply_interval)
         self.btn_users_refresh.clicked.connect(self.refresh_users)
         self.btn_user_add.clicked.connect(self.add_user)
+        self.btn_user_save.clicked.connect(self.save_selected_user_role_and_permissions)
         self.lst_users.currentRowChanged.connect(self.refresh_permission_checks)
 
         self._sync_interval_combo()
         self.refresh_backups()
         self.refresh_users()
+        self._apply_permissions()
+
+    def _apply_permissions(self) -> None:
+        can_backup = bool(self.svc.has_permission("backup.manage"))
+        for btn in (self.btn_refresh, self.btn_create, self.btn_restore, self.btn_apply_interval):
+            btn.setEnabled(can_backup)
+        self.cmb_interval.setEnabled(can_backup)
+
+        can_users = bool(self.svc.has_permission("users.manage"))
+        for btn in (self.btn_users_refresh, self.btn_user_add, self.btn_user_save):
+            btn.setEnabled(can_users)
+        self.lst_users.setEnabled(can_users)
+        self.cmb_user_role.setEnabled(can_users)
+        if not can_users:
+            self.btn_user_add.setToolTip("Brak uprawnienia: users.manage")
 
     def _sync_interval_combo(self) -> None:
         sec = int(getattr(backup_manager, "interval_seconds", 30 * 60))
@@ -231,6 +257,9 @@ class SettingsPage(QWidget):
 
     def refresh_users(self) -> None:
         self.lst_users.clear()
+        self.cmb_user_role.clear()
+        for role_id, role_name in self.svc.list_roles():
+            self.cmb_user_role.addItem(role_name, int(role_id))
         self._users_cache = self.svc.list_users()
         for user_id, login, role_name, is_active in self._users_cache:
             status = "AKTYWNY" if int(is_active) == 1 else "ZABLOKOWANY"
@@ -248,27 +277,30 @@ class SettingsPage(QWidget):
         if current < 0 or current >= len(getattr(self, "_users_cache", [])):
             return
 
-        _, _, _, _ = self._users_cache[current]
-        role_name = self._users_cache[current][2]
+        _, _, role_name, _ = self._users_cache[current]
         roles = {name: rid for rid, name in self.svc.list_roles()}
         role_id = roles.get(role_name)
         if not role_id:
             return
+        ridx = self.cmb_user_role.findData(int(role_id))
+        if ridx >= 0:
+            self.cmb_user_role.setCurrentIndex(ridx)
         selected = set(self.svc.role_permission_keys(int(role_id)))
 
         perms = self.svc.list_permissions()
         for idx, (_, key, label) in enumerate(perms):
             chk = QCheckBox(label)
             chk.setChecked(key in selected)
-            chk.setEnabled(False)
+            chk.setEnabled(bool(self.svc.has_permission("users.manage")))
+            chk.setProperty("perm_key", key)
             self.perm_grid.addWidget(chk, idx // 2, idx % 2)
 
     def add_user(self) -> None:
         d = AddUserDialog(self.svc, self)
-        if d.exec() != QDialog.Accepted:
+        if d.exec() != QDialog.DialogCode.Accepted:
             return
         admin_password, login, password, role_id = d.get_data()
-        if admin_password != "Mikler2000praca":
+        if admin_password != MAIN_ADMIN_PASSWORD:
             QMessageBox.warning(self, "Użytkownicy", "Nieprawidłowe hasło główne.")
             return
         if not login or not password:
@@ -280,3 +312,35 @@ class SettingsPage(QWidget):
             self.refresh_users()
         except Exception as e:
             QMessageBox.critical(self, "Użytkownicy", f"Nie udało się dodać użytkownika:\n{e}")
+
+    def save_selected_user_role_and_permissions(self) -> None:
+        current = self.lst_users.currentRow()
+        if current < 0 or current >= len(getattr(self, "_users_cache", [])):
+            QMessageBox.information(self, "Użytkownicy", "Wybierz użytkownika z listy.")
+            return
+        user_id = int(self._users_cache[current][0])
+        role_id = int(self.cmb_user_role.currentData())
+        selected_keys = []
+        for i in range(self.perm_grid.count()):
+            w = self.perm_grid.itemAt(i).widget()
+            if isinstance(w, QCheckBox) and w.isChecked():
+                selected_keys.append(str(w.property("perm_key") or ""))
+
+        p = QLineEdit(self)
+        p.setEchoMode(QLineEdit.Password)
+        p.setPlaceholderText("Hasło główne")
+        q = QMessageBox(self)
+        q.setWindowTitle("Potwierdź zmiany")
+        q.setText("Podaj hasło główne, aby zapisać rolę i uprawnienia:")
+        q.layout().addWidget(p, 1, 1)
+        q.setStandardButtons(QMessageBox.Ok | QMessageBox.Cancel)
+        if q.exec() != QMessageBox.Ok:
+            return
+        if p.text().strip() != MAIN_ADMIN_PASSWORD:
+            QMessageBox.warning(self, "Użytkownicy", "Nieprawidłowe hasło główne.")
+            return
+
+        self.svc.set_user_role(user_id, role_id)
+        self.svc.update_role_permissions(role_id, selected_keys)
+        QMessageBox.information(self, "Użytkownicy", "Zapisano rolę i uprawnienia.")
+        self.refresh_users()

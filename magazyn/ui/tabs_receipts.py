@@ -268,6 +268,7 @@ class ReceiptsTab(QWidget):
 
         self._build()
         self._install_shortcuts()
+        self._apply_permissions()
         self.refresh()
 
         QTimer.singleShot(50, self._focus_scan_start)
@@ -459,6 +460,19 @@ class ReceiptsTab(QWidget):
         root.setStretch(3, 0)
 
         self.apply_mode()
+
+    def _apply_permissions(self) -> None:
+        can_view = bool(self.svc.has_permission("receipts.view"))
+        can_edit = bool(self.svc.has_permission("receipts.edit"))
+        self.table.setEnabled(can_view)
+        self.search.setEnabled(can_view)
+        self.filter_type.setEnabled(can_view)
+        self.filter_from.setEnabled(can_view)
+        self.filter_to.setEnabled(can_view)
+        self.btn_search.setEnabled(can_view)
+        self.btn_clear.setEnabled(can_view)
+        for b in (self.btn_add, self.btn_edit, self.btn_del, self.btn_import, self.btn_export, self.btn_copy, self.btn_clear_form):
+            b.setEnabled(can_edit)
 
     def _toggle_form(self, split: QSplitter, expanded: bool) -> None:
         if expanded:

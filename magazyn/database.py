@@ -355,6 +355,48 @@ def create_user(login: str, password: str, role_id: int) -> None:
         conn.commit()
 
 
+def get_user_permission_keys(user_id: int) -> List[str]:
+    with get_conn() as conn:
+        return [
+            str(r[0])
+            for r in conn.execute(
+                """
+                SELECT DISTINCT p.key
+                FROM app_users u
+                JOIN app_role_permissions rp ON rp.role_id=u.role_id
+                JOIN app_permissions p ON p.id=rp.permission_id
+                WHERE u.id=? AND u.is_active=1
+                """,
+                (int(user_id),),
+            )
+        ]
+
+
+def update_role_permissions(role_id: int, permission_keys: List[str]) -> None:
+    with get_conn() as conn:
+        cur = conn.cursor()
+        cur.execute("DELETE FROM app_role_permissions WHERE role_id=?", (int(role_id),))
+        for key in permission_keys:
+            cur.execute("SELECT id FROM app_permissions WHERE key=?", (str(key),))
+            row = cur.fetchone()
+            if row:
+                cur.execute(
+                    "INSERT OR IGNORE INTO app_role_permissions(role_id, permission_id) VALUES (?, ?)",
+                    (int(role_id), int(row[0])),
+                )
+        conn.commit()
+
+
+def set_user_role(user_id: int, role_id: int) -> None:
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    with get_conn() as conn:
+        conn.execute(
+            "UPDATE app_users SET role_id=?, updated_at=? WHERE id=?",
+            (int(role_id), now, int(user_id)),
+        )
+        conn.commit()
+
+
 def migrate_db():
     """Migracje bazy danych"""
     with get_conn() as conn:

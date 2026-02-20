@@ -212,8 +212,9 @@ class DeliveriesTab(QWidget):
         self._build()
         self._install_shortcuts()
         self._apply_permissions()
-        self.refresh_lists()
-        self.refresh()
+        if self.svc.has_permission("deliveries.view"):
+            self.refresh_lists()
+            self.refresh()
 
     def _build(self) -> None:
         root = QVBoxLayout(self)

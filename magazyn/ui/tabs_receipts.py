@@ -269,7 +269,8 @@ class ReceiptsTab(QWidget):
         self._build()
         self._install_shortcuts()
         self._apply_permissions()
-        self.refresh()
+        if self.svc.has_permission("receipts.view"):
+            self.refresh()
 
         QTimer.singleShot(50, self._focus_scan_start)
 

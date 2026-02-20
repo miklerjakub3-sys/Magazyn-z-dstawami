@@ -258,9 +258,13 @@ class SettingsPage(QWidget):
     def refresh_users(self) -> None:
         self.lst_users.clear()
         self.cmb_user_role.clear()
-        for role_id, role_name in self.svc.list_roles():
-            self.cmb_user_role.addItem(role_name, int(role_id))
-        self._users_cache = self.svc.list_users()
+        try:
+            for role_id, role_name in self.svc.list_roles():
+                self.cmb_user_role.addItem(role_name, int(role_id))
+            self._users_cache = self.svc.list_users()
+        except PermissionError:
+            self._users_cache = []
+            return
         for user_id, login, role_name, is_active in self._users_cache:
             status = "AKTYWNY" if int(is_active) == 1 else "ZABLOKOWANY"
             self.lst_users.addItem(f"{login} | {role_name} | {status} | id={user_id}")
@@ -278,7 +282,10 @@ class SettingsPage(QWidget):
             return
 
         _, _, role_name, _ = self._users_cache[current]
-        roles = {name: rid for rid, name in self.svc.list_roles()}
+        try:
+            roles = {name: rid for rid, name in self.svc.list_roles()}
+        except PermissionError:
+            return
         role_id = roles.get(role_name)
         if not role_id:
             return
@@ -287,7 +294,10 @@ class SettingsPage(QWidget):
             self.cmb_user_role.setCurrentIndex(ridx)
         selected = set(self.svc.role_permission_keys(int(role_id)))
 
-        perms = self.svc.list_permissions()
+        try:
+            perms = self.svc.list_permissions()
+        except PermissionError:
+            return
         for idx, (_, key, label) in enumerate(perms):
             chk = QCheckBox(label)
             chk.setChecked(key in selected)

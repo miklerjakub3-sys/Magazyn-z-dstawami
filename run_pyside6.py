@@ -61,6 +61,8 @@ def main() -> int:
             login_dialog.in_password.clear()
             login_dialog.in_password.setFocus()
 
+    svc.set_current_user(user)
+
     win = MainWindow(svc)
     win.show()
 

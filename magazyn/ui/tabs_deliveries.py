@@ -211,6 +211,7 @@ class DeliveriesTab(QWidget):
         self._settings = QSettings("Magazyn", "DostawyUI")
         self._build()
         self._install_shortcuts()
+        self._apply_permissions()
         self.refresh_lists()
         self.refresh()
 
@@ -384,6 +385,28 @@ class DeliveriesTab(QWidget):
         self.btn_attach.clicked.connect(self.on_attach)
         self.btn_del_att.clicked.connect(self.on_delete_attachment)
         self.btn_open_att.clicked.connect(self.on_open_attachment)
+
+    def _apply_permissions(self) -> None:
+        can_view = bool(self.svc.has_permission("deliveries.view"))
+        can_edit = bool(self.svc.has_permission("deliveries.edit"))
+
+        for w in (self.f_from, self.f_to, self.f_type, self.btn_search, self.btn_clear):
+            w.setEnabled(can_view)
+        self.table.setEnabled(can_view)
+        self.tbl_linked.setEnabled(can_view)
+
+        for b in (
+            self.btn_add,
+            self.btn_save,
+            self.btn_del,
+            self.btn_link,
+            self.btn_clear_form,
+            self.btn_attach,
+            self.btn_del_att,
+            self.btn_open_att,
+            self.btn_export,
+        ):
+            b.setEnabled(can_edit)
 
         self.table.itemSelectionChanged.connect(self.load_selected)
         self.table.itemSelectionChanged.connect(self._update_context_actions)

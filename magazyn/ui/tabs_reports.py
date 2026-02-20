@@ -49,6 +49,7 @@ class ReportsTab(QWidget):
         super().__init__()
         self.svc = svc
         self._build()
+        self._apply_permissions()
 
     def _build(self) -> None:
         root = QVBoxLayout(self)
@@ -109,6 +110,11 @@ class ReportsTab(QWidget):
 
         root.addWidget(self.btn_export)
         root.addStretch(1)
+
+    def _apply_permissions(self) -> None:
+        can_export = bool(self.svc.has_permission("reports.export"))
+        for w in (self.in_from, self.in_to, self.in_receipt_type, self.in_delivery_type, self.btn_export):
+            w.setEnabled(can_export)
 
     @staticmethod
     def _date_text(w: QDateEdit) -> str:

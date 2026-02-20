@@ -30,6 +30,10 @@ class PagedResult:
 
 
 class MagazynService:
+    def __init__(self) -> None:
+        self.current_user = None
+        self._permission_cache = set()
+
     def init_db(self) -> None:
         database.init_db()
 
@@ -57,6 +61,26 @@ class MagazynService:
 
     def create_user(self, login: str, password: str, role_id: int) -> None:
         database.create_user(login, password, role_id)
+
+
+    def set_current_user(self, user) -> None:
+        self.current_user = user
+        if user and user.get("id"):
+            self._permission_cache = set(database.get_user_permission_keys(int(user["id"])))
+        else:
+            self._permission_cache = set()
+
+    def has_permission(self, key: str) -> bool:
+        return str(key) in self._permission_cache
+
+    def get_user_permission_keys(self, user_id: int):
+        return database.get_user_permission_keys(user_id)
+
+    def update_role_permissions(self, role_id: int, permission_keys):
+        database.update_role_permissions(role_id, list(permission_keys))
+
+    def set_user_role(self, user_id: int, role_id: int) -> None:
+        database.set_user_role(user_id, role_id)
 
     # --- Devices ---
     def search_devices(

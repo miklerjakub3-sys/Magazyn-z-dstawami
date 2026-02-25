@@ -88,8 +88,12 @@ class LinkReceiptsDialog(QDialog):
         self.btn_set_delivery_date.clicked.connect(lambda: self._set_date(self.delivery_date))
         top.addWidget(self.btn_set_delivery_date)
 
-        self.chk_all = QCheckBox("Pokaż wszystkie z dnia (również powiązane z inną dostawą)")
+        self.chk_all = QCheckBox("Pokaż także rekordy powiązane z innymi dostawami")
         top.addWidget(self.chk_all)
+        self.chk_all.setToolTip(
+            "Wyłączone: widzisz rekordy wolne z wybranego dnia + zawsze rekordy bieżącej dostawy.\n"
+            "Włączone: dodatkowo pokazuje rekordy z wybranego dnia powiązane z innymi dostawami."
+        )
         top.addStretch(1)
 
         self.btn_refresh = QPushButton("Odśwież")
@@ -106,7 +110,16 @@ class LinkReceiptsDialog(QDialog):
         self.table.setStyleSheet("font-size: 12px;")
         self.table.setSelectionBehavior(QTableWidget.SelectRows)
         self.table.setSelectionMode(QTableWidget.ExtendedSelection)
+        self.table.setStyleSheet(
+            "QTableWidget {font-size: 12px; selection-background-color: #2563eb; selection-color: #ffffff;}"
+        )
         root.addWidget(self.table, 1)
+
+        self.lbl_legend = QLabel(
+            "Legenda: zielone = wolne do powiązania, szare = już powiązane z tą dostawą, pomarańczowe = powiązane z inną dostawą"
+        )
+        self.lbl_legend.setProperty("subtitle", True)
+        root.addWidget(self.lbl_legend)
 
         btns = QHBoxLayout()
         root.addLayout(btns)
@@ -145,12 +158,12 @@ class LinkReceiptsDialog(QDialog):
             delivery_id=self.delivery_id,
         )
 
-        headers = ["ID", "Typ", "Nazwa", "SN/Kod", "IMEI1", "IMEI2", "Kod prod.", "Powiązanie"]
+        headers = ["ID", "Data", "Typ", "Nazwa", "SN/Kod", "IMEI1", "IMEI2", "Kod prod.", "Powiązanie"]
         out = []
         for r in rows:
             linked = int(r[10] or 0)
             label = "BRAK" if linked == 0 else f"ID={linked}"
-            out.append([r[0], ITEM_TYPE_TO_LABEL.get(r[2], r[2]), r[3] or "", r[4] or "", r[5] or "", r[6] or "", r[7] or "", label])
+            out.append([r[0], r[1] or "", ITEM_TYPE_TO_LABEL.get(r[2], r[2]), r[3] or "", r[4] or "", r[5] or "", r[6] or "", r[7] or "", label])
 
         fill_table(self.table, headers, out)
 
@@ -159,7 +172,7 @@ class LinkReceiptsDialog(QDialog):
             if linked == 0:
                 bg = QColor("#e2f0d9")
             elif linked == self.delivery_id:
-                bg = QColor("#ddebf7")
+                bg = QColor("#e5e7eb")
             else:
                 bg = QColor("#f8cbad")
             for c in range(self.table.columnCount()):

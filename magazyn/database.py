@@ -1115,15 +1115,22 @@ def list_devices_for_delivery_date(delivery_date: str, include_linked_to_other: 
         return []
     validate_ymd(delivery_date)
 
-    where = ["received_date = ?"]
-    params = [delivery_date]
-
-    if not include_linked_to_other:
-        if delivery_id is None:
+    params = []
+    if delivery_id is None:
+        where = ["received_date = ?"]
+        params.append(delivery_date)
+        if not include_linked_to_other:
             where.append("delivery_id IS NULL")
+    else:
+        did = int(delivery_id)
+        # Zawsze pokazuj rekordy już powiązane z bieżącą dostawą,
+        # nawet jeśli mają inną datę niż aktualnie wybrana w filtrze.
+        if include_linked_to_other:
+            where = ["(received_date = ? OR delivery_id = ?)"]
+            params.extend([delivery_date, did])
         else:
-            where.append("(delivery_id IS NULL OR delivery_id = ?)")
-            params.append(int(delivery_id))
+            where = ["((received_date = ? AND (delivery_id IS NULL OR delivery_id = ?)) OR delivery_id = ?)"]
+            params.extend([delivery_date, did, did])
 
     with get_conn() as conn:
         cur = conn.cursor()

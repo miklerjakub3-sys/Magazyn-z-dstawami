@@ -313,6 +313,10 @@ class MagazynService:
         self._require("deliveries.view")
         return database.list_devices_for_delivery_date(delivery_date, include_linked_to_other, delivery_id)
 
+    def list_devices_for_delivery_linking(self, delivery_id: int, show_all: bool = False, query: str = "", limit: int = 5000):
+        self._require("deliveries.view")
+        return database.list_devices_for_delivery_linking(delivery_id, show_all=show_all, query=query, limit=limit)
+
     def assign_devices_to_delivery(self, device_ids, delivery_id: int) -> None:
         self._require("deliveries.edit")
         database.assign_devices_to_delivery(device_ids, delivery_id)

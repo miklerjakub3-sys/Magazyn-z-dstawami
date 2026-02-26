@@ -76,24 +76,17 @@ class LinkReceiptsDialog(QDialog):
         top = QHBoxLayout()
         root.addLayout(top)
         top.addWidget(QLabel(f"Dostawa ID={delivery_id} | Data: {delivery_date}"))
-        top.addWidget(QLabel("Przyjęcia z dnia:"))
-
-        self.dt_pick = QDateEdit()
-        self.dt_pick.setCalendarPopup(True)
-        self.dt_pick.setDisplayFormat("yyyy-MM-dd")
-        self._set_date(self.delivery_date)
-        top.addWidget(self.dt_pick)
-
-        self.btn_set_delivery_date = QPushButton("↩ Data dostawy")
-        self.btn_set_delivery_date.clicked.connect(lambda: self._set_date(self.delivery_date))
-        top.addWidget(self.btn_set_delivery_date)
-
-        self.chk_all = QCheckBox("Pokaż także rekordy powiązane z innymi dostawami")
+        self.chk_all = QCheckBox("Pokaż wszystkie urządzenia")
         top.addWidget(self.chk_all)
         self.chk_all.setToolTip(
-            "Wyłączone: widzisz rekordy wolne z wybranego dnia + zawsze rekordy bieżącej dostawy.\n"
-            "Włączone: dodatkowo pokazuje rekordy z wybranego dnia powiązane z innymi dostawami."
+            "Wyłączone: tylko rekordy powiązane z tą dostawą.\n"
+            "Włączone: wszystkie urządzenia, od najnowszych."
         )
+        top.addWidget(QLabel("Szukaj:"))
+        self.search = QLineEdit()
+        self.search.setPlaceholderText("Nazwa / SN / IMEI")
+        self.search.setProperty("compact", True)
+        top.addWidget(self.search)
         top.addStretch(1)
 
         self.btn_refresh = QPushButton("Odśwież")
@@ -104,7 +97,7 @@ class LinkReceiptsDialog(QDialog):
         self.btn_close.clicked.connect(self.close)
         self.btn_refresh.clicked.connect(self.refresh)
         self.chk_all.stateChanged.connect(lambda _: self.refresh())
-        self.dt_pick.dateChanged.connect(lambda _: self.refresh())
+        self.search.textChanged.connect(lambda _: self.refresh())
 
         self.table = QTableWidget()
         self.table.setStyleSheet("font-size: 12px;")
@@ -116,7 +109,7 @@ class LinkReceiptsDialog(QDialog):
         root.addWidget(self.table, 1)
 
         self.lbl_legend = QLabel(
-            "Legenda: zielone = wolne do powiązania, szare = już powiązane z tą dostawą, pomarańczowe = powiązane z inną dostawą"
+            "Legenda: szare = już powiązane z tą dostawą, zielone = wolne do powiązania, pomarańczowe = powiązane z inną dostawą"
         )
         self.lbl_legend.setProperty("subtitle", True)
         root.addWidget(self.lbl_legend)
@@ -134,13 +127,6 @@ class LinkReceiptsDialog(QDialog):
 
         self.refresh()
 
-    def _set_date(self, s: str) -> None:
-        try:
-            y, m, d = [int(x) for x in (s or "").split("-")]
-            self.dt_pick.setDate(QDate(y, m, d))
-        except Exception:
-            self.dt_pick.setDate(QDate.currentDate())
-
     def _selected_ids(self) -> List[int]:
         ids: List[int] = []
         for idx in self.table.selectionModel().selectedRows():
@@ -151,11 +137,10 @@ class LinkReceiptsDialog(QDialog):
         return ids
 
     def refresh(self) -> None:
-        picked = self.dt_pick.date().toString("yyyy-MM-dd")
-        rows = self.svc.list_devices_for_delivery_date(
-            picked,
-            include_linked_to_other=self.chk_all.isChecked(),
-            delivery_id=self.delivery_id,
+        rows = self.svc.list_devices_for_delivery_linking(
+            self.delivery_id,
+            show_all=self.chk_all.isChecked(),
+            query=self.search.text().strip(),
         )
 
         headers = ["ID", "Data", "Typ", "Nazwa", "SN/Kod", "IMEI1", "IMEI2", "Kod prod.", "Powiązanie"]

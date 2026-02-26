@@ -1145,6 +1145,53 @@ def list_devices_for_delivery_date(delivery_date: str, include_linked_to_other: 
         return cur.fetchall()
 
 
+def list_devices_for_delivery_linking(delivery_id: int, show_all: bool = False, query: str = "", limit: int = 5000):
+    """Lista urządzeń do okna powiązań dostawy.
+
+    - show_all=False: tylko rekordy już powiązane z bieżącą dostawą
+    - show_all=True: wszystkie rekordy (najnowsze na górze)
+    """
+    did = int(delivery_id)
+    q = (query or "").strip()
+    where = []
+    params = []
+
+    if show_all:
+        where.append("1=1")
+    else:
+        where.append("delivery_id = ?")
+        params.append(did)
+
+    if q:
+        where.append(
+            "(" 
+            "COALESCE(device_name,'') LIKE ? OR "
+            "COALESCE(serial_number,'') LIKE ? OR "
+            "COALESCE(imei1,'') LIKE ? OR "
+            "COALESCE(imei2,'') LIKE ?"
+            ")"
+        )
+        like = f"%{q}%"
+        params.extend([like, like, like, like])
+
+    params.append(int(limit))
+
+    with get_conn() as conn:
+        cur = conn.cursor()
+        cur.execute(
+            f"""
+            SELECT id, received_date, item_type, device_name, serial_number, imei1, imei2,
+                   production_code, notes, created_at, COALESCE(delivery_id, 0)
+            FROM devices
+            WHERE {' AND '.join(where)}
+            ORDER BY received_date DESC, id DESC
+            LIMIT ?
+            """,
+            params,
+        )
+        return cur.fetchall()
+
+
 def assign_devices_to_delivery(device_ids, delivery_id: int):
     """Przypisanie urządzeń do dostawy"""
     if not device_ids:

@@ -7,6 +7,9 @@ Moduł bazy danych - operacje na urządzeniach i dostawach
 import os
 import sqlite3
 import shutil
+import hashlib
+import hmac
+import secrets
 from datetime import datetime
 from typing import Optional, List, Tuple
 from .config import DB_PATH, DELIVERY_ATTACH_DIR, DELIVERY_TYPES
@@ -94,6 +97,56 @@ def init_db():
             )
         """)
 
+        # Użytkownicy / role / uprawnienia
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS app_roles (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL UNIQUE,
+                created_at TEXT NOT NULL
+            )
+        """)
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS app_permissions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                key TEXT NOT NULL UNIQUE,
+                label TEXT NOT NULL
+            )
+        """)
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS app_role_permissions (
+                role_id INTEGER NOT NULL,
+                permission_id INTEGER NOT NULL,
+                PRIMARY KEY(role_id, permission_id),
+                FOREIGN KEY(role_id) REFERENCES app_roles(id) ON DELETE CASCADE,
+                FOREIGN KEY(permission_id) REFERENCES app_permissions(id) ON DELETE CASCADE
+            )
+        """)
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS app_users (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                login TEXT NOT NULL UNIQUE,
+                password_hash TEXT NOT NULL,
+                role_id INTEGER NOT NULL,
+                is_active INTEGER NOT NULL DEFAULT 1,
+                recovery_email TEXT,
+                reset_code_hash TEXT,
+                reset_code_expires TEXT,
+                created_at TEXT NOT NULL,
+                updated_at TEXT,
+                FOREIGN KEY(role_id) REFERENCES app_roles(id)
+            )
+        """)
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS app_remember_tokens (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                token_hash TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                expires_at TEXT NOT NULL,
+                FOREIGN KEY(user_id) REFERENCES app_users(id) ON DELETE CASCADE
+            )
+        """)
+
         # INDEKSY - kluczowe dla wydajności
         indices = [
             "CREATE INDEX IF NOT EXISTS idx_devices_received_date ON devices(received_date)",
@@ -118,6 +171,310 @@ def init_db():
         conn.commit()
 
     migrate_db()
+    seed_auth_defaults()
+
+
+PBKDF2_ROUNDS = 240000
+
+
+def _password_hash(password: str, salt: Optional[bytes] = None) -> str:
+    s = salt or secrets.token_bytes(16)
+    digest = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), s, PBKDF2_ROUNDS)
+    return f"pbkdf2_sha256${PBKDF2_ROUNDS}${s.hex()}${digest.hex()}"
+
+
+def _verify_password(password: str, packed: str) -> bool:
+    try:
+        alg, rounds, salt_hex, hash_hex = packed.split("$", 3)
+        if alg != "pbkdf2_sha256":
+            return False
+        digest = hashlib.pbkdf2_hmac(
+            "sha256",
+            password.encode("utf-8"),
+            bytes.fromhex(salt_hex),
+            int(rounds),
+        )
+        return hmac.compare_digest(digest.hex(), hash_hex)
+    except Exception:
+        return False
+
+
+def seed_auth_defaults() -> None:
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    permissions = [
+        ("receipts.view", "Przyjęcia: podgląd"),
+        ("receipts.edit", "Przyjęcia: edycja"),
+        ("deliveries.view", "Dostawy: podgląd"),
+        ("deliveries.edit", "Dostawy: edycja"),
+        ("reports.export", "Raporty: eksport"),
+        ("backup.manage", "Backup: zarządzanie"),
+        ("users.manage", "Użytkownicy: zarządzanie"),
+    ]
+    with get_conn() as conn:
+        cur = conn.cursor()
+        for key, label in permissions:
+            cur.execute("INSERT OR IGNORE INTO app_permissions(key, label) VALUES (?, ?)", (key, label))
+
+        for role_name in ("Administrator", "Gość", "Praktykant"):
+            cur.execute("INSERT OR IGNORE INTO app_roles(name, created_at) VALUES(?, ?)", (role_name, now))
+
+        cur.execute("SELECT id, key FROM app_permissions")
+        perm_map = {str(key): int(pid) for pid, key in cur.fetchall()}
+
+        cur.execute("SELECT id FROM app_roles WHERE name=?", ("Administrator",))
+        admin_role_id = int(cur.fetchone()[0])
+        for perm_id in perm_map.values():
+            cur.execute(
+                "INSERT OR IGNORE INTO app_role_permissions(role_id, permission_id) VALUES (?, ?)",
+                (admin_role_id, perm_id),
+            )
+
+        # Role startowe, które później można dowolnie skonfigurować z Ustawień.
+        cur.execute("SELECT id FROM app_roles WHERE name=?", ("Gość",))
+        guest_role_id = int(cur.fetchone()[0])
+        for key in ("receipts.view", "deliveries.view"):
+            perm_id = perm_map.get(key)
+            if perm_id:
+                cur.execute(
+                    "INSERT OR IGNORE INTO app_role_permissions(role_id, permission_id) VALUES (?, ?)",
+                    (guest_role_id, perm_id),
+                )
+
+        cur.execute("SELECT id FROM app_roles WHERE name=?", ("Praktykant",))
+        trainee_role_id = int(cur.fetchone()[0])
+        for key in ("receipts.view", "receipts.edit", "deliveries.view"):
+            perm_id = perm_map.get(key)
+            if perm_id:
+                cur.execute(
+                    "INSERT OR IGNORE INTO app_role_permissions(role_id, permission_id) VALUES (?, ?)",
+                    (trainee_role_id, perm_id),
+                )
+
+        cur.execute("SELECT COUNT(1) FROM app_users")
+        if int(cur.fetchone()[0]) == 0:
+            cur.execute(
+                "INSERT INTO app_users(login, password_hash, role_id, created_at) VALUES (?, ?, ?, ?)",
+                ("Jakub", _password_hash("Mikler2000praca"), admin_role_id, now),
+            )
+        conn.commit()
+
+
+def authenticate_user(login: str, password: str):
+    with get_conn() as conn:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT u.id, u.login, u.password_hash, u.role_id, r.name, u.is_active
+            FROM app_users u
+            JOIN app_roles r ON r.id=u.role_id
+            WHERE LOWER(u.login)=LOWER(?)
+            """,
+            ((login or "").strip(),),
+        )
+        row = cur.fetchone()
+        if not row:
+            return None
+        if int(row[5]) != 1:
+            return None
+        if not _verify_password(password, str(row[2])):
+            return None
+        return {
+            "id": int(row[0]),
+            "login": str(row[1]),
+            "role_id": int(row[3]),
+            "role_name": str(row[4]),
+        }
+
+
+def create_remember_token(user_id: int, days_valid: int = 30) -> str:
+    token = secrets.token_urlsafe(32)
+    token_hash = hashlib.sha256(token.encode("utf-8")).hexdigest()
+    now = datetime.now()
+    exp = now.timestamp() + (days_valid * 86400)
+    with get_conn() as conn:
+        cur = conn.cursor()
+        cur.execute(
+            "INSERT INTO app_remember_tokens(user_id, token_hash, created_at, expires_at) VALUES (?, ?, ?, ?)",
+            (
+                int(user_id),
+                token_hash,
+                now.strftime("%Y-%m-%d %H:%M:%S"),
+                datetime.fromtimestamp(exp).strftime("%Y-%m-%d %H:%M:%S"),
+            ),
+        )
+        conn.commit()
+    return token
+
+
+def authenticate_token(token: str):
+    token_hash = hashlib.sha256((token or "").encode("utf-8")).hexdigest()
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    with get_conn() as conn:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT u.id, u.login, u.role_id, r.name
+            FROM app_remember_tokens t
+            JOIN app_users u ON u.id=t.user_id
+            JOIN app_roles r ON r.id=u.role_id
+            WHERE t.token_hash=? AND t.expires_at>=? AND u.is_active=1
+            ORDER BY t.id DESC LIMIT 1
+            """,
+            (token_hash, now),
+        )
+        row = cur.fetchone()
+        if not row:
+            return None
+        return {
+            "id": int(row[0]),
+            "login": str(row[1]),
+            "role_id": int(row[2]),
+            "role_name": str(row[3]),
+        }
+
+
+def list_permissions() -> List[Tuple[int, str, str]]:
+    with get_conn() as conn:
+        return list(conn.execute("SELECT id, key, label FROM app_permissions ORDER BY id"))
+
+
+def list_roles() -> List[Tuple[int, str]]:
+    with get_conn() as conn:
+        return list(conn.execute("SELECT id, name FROM app_roles ORDER BY name"))
+
+
+def list_users() -> List[Tuple[int, str, str, int]]:
+    with get_conn() as conn:
+        return list(
+            conn.execute(
+                """
+                SELECT u.id, u.login, r.name, u.is_active
+                FROM app_users u
+                JOIN app_roles r ON r.id=u.role_id
+                ORDER BY u.login
+                """
+            )
+        )
+
+
+def role_permission_keys(role_id: int) -> List[str]:
+    with get_conn() as conn:
+        return [
+            str(r[0])
+            for r in conn.execute(
+                """
+                SELECT p.key FROM app_role_permissions rp
+                JOIN app_permissions p ON p.id=rp.permission_id
+                WHERE rp.role_id=?
+                """,
+                (int(role_id),),
+            )
+        ]
+
+
+def create_user(login: str, password: str, role_id: int) -> None:
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    with get_conn() as conn:
+        conn.execute(
+            "INSERT INTO app_users(login, password_hash, role_id, created_at) VALUES (?, ?, ?, ?)",
+            ((login or "").strip(), _password_hash(password), int(role_id), now),
+        )
+        conn.commit()
+
+
+def get_user_permission_keys(user_id: int) -> List[str]:
+    with get_conn() as conn:
+        return [
+            str(r[0])
+            for r in conn.execute(
+                """
+                SELECT DISTINCT p.key
+                FROM app_users u
+                JOIN app_role_permissions rp ON rp.role_id=u.role_id
+                JOIN app_permissions p ON p.id=rp.permission_id
+                WHERE u.id=? AND u.is_active=1
+                """,
+                (int(user_id),),
+            )
+        ]
+
+
+def update_role_permissions(role_id: int, permission_keys: List[str]) -> None:
+    with get_conn() as conn:
+        cur = conn.cursor()
+        cur.execute("DELETE FROM app_role_permissions WHERE role_id=?", (int(role_id),))
+        for key in permission_keys:
+            cur.execute("SELECT id FROM app_permissions WHERE key=?", (str(key),))
+            row = cur.fetchone()
+            if row:
+                cur.execute(
+                    "INSERT OR IGNORE INTO app_role_permissions(role_id, permission_id) VALUES (?, ?)",
+                    (int(role_id), int(row[0])),
+                )
+        conn.commit()
+
+
+def set_user_role(user_id: int, role_id: int) -> None:
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    with get_conn() as conn:
+        conn.execute(
+            "UPDATE app_users SET role_id=?, updated_at=? WHERE id=?",
+            (int(role_id), now, int(user_id)),
+        )
+        conn.commit()
+
+
+def set_admin_recovery_email(login: str, email: str) -> None:
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    with get_conn() as conn:
+        conn.execute(
+            "UPDATE app_users SET recovery_email=?, updated_at=? WHERE LOWER(login)=LOWER(?)",
+            ((email or "").strip(), now, (login or "").strip()),
+        )
+        conn.commit()
+
+
+def get_admin_recovery_email(login: str) -> str:
+    with get_conn() as conn:
+        cur = conn.cursor()
+        cur.execute("SELECT COALESCE(recovery_email,'') FROM app_users WHERE LOWER(login)=LOWER(?)", ((login or "").strip(),))
+        row = cur.fetchone()
+        return str(row[0]) if row else ""
+
+
+def set_password_reset_code(login: str, email: str, code_hash: str, expires_at: str) -> bool:
+    with get_conn() as conn:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            UPDATE app_users
+            SET reset_code_hash=?, reset_code_expires=?
+            WHERE LOWER(login)=LOWER(?) AND LOWER(COALESCE(recovery_email,''))=LOWER(?) AND is_active=1
+            """,
+            (code_hash, expires_at, (login or "").strip(), (email or "").strip()),
+        )
+        conn.commit()
+        return cur.rowcount > 0
+
+
+def consume_password_reset_code(login: str, email: str, code_hash: str, new_password_hash: str) -> bool:
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    with get_conn() as conn:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            UPDATE app_users
+            SET password_hash=?, reset_code_hash=NULL, reset_code_expires=NULL, updated_at=?
+            WHERE LOWER(login)=LOWER(?)
+              AND LOWER(COALESCE(recovery_email,''))=LOWER(?)
+              AND COALESCE(reset_code_hash,'')=?
+              AND COALESCE(reset_code_expires,'')>=?
+              AND is_active=1
+            """,
+            (new_password_hash, now, (login or "").strip(), (email or "").strip(), code_hash, now),
+        )
+        conn.commit()
+        return cur.rowcount > 0
 
 
 def migrate_db():
@@ -173,6 +530,22 @@ def migrate_db():
                     get_logger("magazyn.db").exception(f"Nie można dodać kolumny {col}")
 
         conn.commit()
+
+        # App users
+        cur.execute("PRAGMA table_info(app_users)")
+        ucols = {row[1] for row in cur.fetchall()}
+        u_needed = {
+            "recovery_email": "TEXT",
+            "reset_code_hash": "TEXT",
+            "reset_code_expires": "TEXT",
+        }
+        for col, coltype in u_needed.items():
+            if col not in ucols:
+                try:
+                    cur.execute(f"ALTER TABLE app_users ADD COLUMN {col} {coltype}")
+                except Exception:
+                    from .log import get_logger
+                    get_logger("magazyn.db").exception(f"Nie można dodać kolumny {col}")
 
 
 # =======================
@@ -304,17 +677,55 @@ def get_device(device_id):
         return cur.fetchone()
 
 
-def search_devices(query="", item_type="all", order_by="received_date", order_dir="DESC", limit=1000, offset=0):
+def search_devices(
+    query="",
+    item_type="all",
+    date_from="",
+    date_to="",
+    order_by="received_date",
+    order_dir="DESC",
+    limit=1000,
+    offset=0,
+):
     """Wyszukiwanie urządzeń ze stronicowaniem"""
     q = (query or "").strip()
     t = (item_type or "all").strip()
 
-    allowed_order = {"received_date": "received_date", "created_at": "created_at", "id": "id"}
+    allowed_order = {
+        "received_date": "received_date",
+        "created_at": "created_at",
+        "id": "id",
+        "item_type": "item_type",
+        "device_name": "device_name",
+        "serial_number": "serial_number",
+        "imei1": "imei1",
+        "imei2": "imei2",
+        "production_code": "production_code",
+        "delivery_id": "delivery_id",
+        "notes": "notes",
+    }
     ob = allowed_order.get(order_by, "received_date")
     od = "DESC" if (order_dir or "").upper() == "DESC" else "ASC"
 
+    df = (date_from or "").strip()
+    dt = (date_to or "").strip()
+
     where = []
     params = []
+
+    if df and dt:
+        validate_ymd(df)
+        validate_ymd(dt)
+        where.append("received_date BETWEEN ? AND ?")
+        params.extend([df, dt])
+    elif df:
+        validate_ymd(df)
+        where.append("received_date >= ?")
+        params.append(df)
+    elif dt:
+        validate_ymd(dt)
+        where.append("received_date <= ?")
+        params.append(dt)
 
     if t in ("device", "accessory"):
         where.append("item_type = ?")
@@ -359,17 +770,27 @@ def search_devices(query="", item_type="all", order_by="received_date", order_di
 
 
 def get_devices_by_date_range(date_from, date_to, item_type="all"):
-    """Pobieranie urządzeń z zakresu dat"""
+    """Pobieranie urządzeń z opcjonalnego zakresu dat"""
     df = (date_from or "").strip()
     dt = (date_to or "").strip()
-    if not df or not dt:
-        raise ValueError("Podaj zakres dat: od i do (YYYY-MM-DD).")
-    validate_ymd(df)
-    validate_ymd(dt)
 
     t = (item_type or "all").strip()
-    where = ["received_date BETWEEN ? AND ?"]
-    params = [df, dt]
+    where = []
+    params = []
+
+    if df and dt:
+        validate_ymd(df)
+        validate_ymd(dt)
+        where.append("received_date BETWEEN ? AND ?")
+        params.extend([df, dt])
+    elif df:
+        validate_ymd(df)
+        where.append("received_date >= ?")
+        params.append(df)
+    elif dt:
+        validate_ymd(dt)
+        where.append("received_date <= ?")
+        params.append(dt)
     if t in ("device", "accessory"):
         where.append("item_type = ?")
         params.append(t)
@@ -380,7 +801,7 @@ def get_devices_by_date_range(date_from, date_to, item_type="all"):
             SELECT id, received_date, item_type, device_name, serial_number,
                    imei1, imei2, production_code, notes, created_at, delivery_id
             FROM devices
-            WHERE {" AND ".join(where)}
+            {"WHERE " + " AND ".join(where) if where else ""}
             ORDER BY received_date ASC, id ASC
             LIMIT 10000
         """, params)
@@ -543,7 +964,17 @@ def get_delivery(delivery_id: int):
         return cur.fetchone()
 
 
-def search_deliveries(date_from="", date_to="", sender="", courier="", delivery_type="", limit=1000, offset=0):
+def search_deliveries(
+    date_from="",
+    date_to="",
+    sender="",
+    courier="",
+    delivery_type="",
+    order_by="delivery_date",
+    order_dir="DESC",
+    limit=1000,
+    offset=0,
+):
     """Wyszukiwanie dostaw ze stronicowaniem"""
     where = []
     params = []
@@ -559,8 +990,14 @@ def search_deliveries(date_from="", date_to="", sender="", courier="", delivery_
         validate_ymd(dt)
         where.append("delivery_date BETWEEN ? AND ?")
         params.extend([df, dt])
-    elif df or dt:
-        raise ValueError("Podaj oba pola zakresu dat (od i do) albo zostaw puste.")
+    elif df:
+        validate_ymd(df)
+        where.append("delivery_date >= ?")
+        params.append(df)
+    elif dt:
+        validate_ymd(dt)
+        where.append("delivery_date <= ?")
+        params.append(dt)
 
     if sender:
         where.append("COALESCE(sender_name,'') = ?")
@@ -575,6 +1012,20 @@ def search_deliveries(date_from="", date_to="", sender="", courier="", delivery_
             raise ValueError("Nieprawidłowy typ dostawy.")
         where.append("delivery_type = ?")
         params.append(delivery_type)
+
+    allowed_order = {
+        "delivery_date": "delivery_date",
+        "sender_name": "sender_name",
+        "courier_name": "courier_name",
+        "delivery_type": "delivery_type",
+        "tracking_number": "tracking_number",
+        "invoice_vat": "invoice_vat",
+        "notes": "notes",
+        "created_at": "created_at",
+        "id": "id",
+    }
+    ob = allowed_order.get(order_by, "delivery_date")
+    od = "DESC" if (order_dir or "").upper() == "DESC" else "ASC"
 
     where_sql = "WHERE " + " AND ".join(where) if where else ""
 
@@ -591,7 +1042,7 @@ def search_deliveries(date_from="", date_to="", sender="", courier="", delivery_
                    tracking_number, invoice_vat, notes, created_at
             FROM deliveries
             {where_sql}
-            ORDER BY delivery_date DESC, id DESC
+            ORDER BY {ob} {od}, id DESC
             LIMIT ? OFFSET ?
         """, params + [limit, offset])
         
@@ -601,16 +1052,27 @@ def search_deliveries(date_from="", date_to="", sender="", courier="", delivery_
 
 
 def get_deliveries_by_date_range(date_from, date_to, delivery_type=""):
-    """Pobieranie dostaw z zakresu dat"""
+    """Pobieranie dostaw z opcjonalnego zakresu dat"""
     df = (date_from or "").strip()
     dt = (date_to or "").strip()
-    if not df or not dt:
-        raise ValueError("Podaj zakres dat: od i do (YYYY-MM-DD).")
-    validate_ymd(df)
-    validate_ymd(dt)
 
-    where = ["delivery_date BETWEEN ? AND ?"]
-    params = [df, dt]
+    where = []
+    params = []
+
+    if df and dt:
+        validate_ymd(df)
+        validate_ymd(dt)
+        where.append("delivery_date BETWEEN ? AND ?")
+        params.extend([df, dt])
+    elif df:
+        validate_ymd(df)
+        where.append("delivery_date >= ?")
+        params.append(df)
+    elif dt:
+        validate_ymd(dt)
+        where.append("delivery_date <= ?")
+        params.append(dt)
+
     if delivery_type:
         if delivery_type not in DELIVERY_TYPES:
             raise ValueError("Nieprawidłowy typ dostawy.")
@@ -620,10 +1082,10 @@ def get_deliveries_by_date_range(date_from, date_to, delivery_type=""):
     with get_conn() as conn:
         cur = conn.cursor()
         cur.execute(f"""
-            SELECT id, delivery_date, sender_name, courier_name, delivery_type, 
+            SELECT id, delivery_date, sender_name, courier_name, delivery_type,
                    tracking_number, invoice_vat, notes, created_at
             FROM deliveries
-            WHERE {" AND ".join(where)}
+            {"WHERE " + " AND ".join(where) if where else ""}
             ORDER BY delivery_date ASC, id ASC
             LIMIT 10000
         """, params)
@@ -653,15 +1115,22 @@ def list_devices_for_delivery_date(delivery_date: str, include_linked_to_other: 
         return []
     validate_ymd(delivery_date)
 
-    where = ["received_date = ?"]
-    params = [delivery_date]
-
-    if not include_linked_to_other:
-        if delivery_id is None:
+    params = []
+    if delivery_id is None:
+        where = ["received_date = ?"]
+        params.append(delivery_date)
+        if not include_linked_to_other:
             where.append("delivery_id IS NULL")
+    else:
+        did = int(delivery_id)
+        # Zawsze pokazuj rekordy już powiązane z bieżącą dostawą,
+        # nawet jeśli mają inną datę niż aktualnie wybrana w filtrze.
+        if include_linked_to_other:
+            where = ["(received_date = ? OR delivery_id = ?)"]
+            params.extend([delivery_date, did])
         else:
-            where.append("(delivery_id IS NULL OR delivery_id = ?)")
-            params.append(int(delivery_id))
+            where = ["((received_date = ? AND (delivery_id IS NULL OR delivery_id = ?)) OR delivery_id = ?)"]
+            params.extend([delivery_date, did, did])
 
     with get_conn() as conn:
         cur = conn.cursor()
@@ -673,6 +1142,53 @@ def list_devices_for_delivery_date(delivery_date: str, include_linked_to_other: 
             ORDER BY id DESC
             LIMIT 5000
         """, params)
+        return cur.fetchall()
+
+
+def list_devices_for_delivery_linking(delivery_id: int, show_all: bool = False, query: str = "", limit: int = 5000):
+    """Lista urządzeń do okna powiązań dostawy.
+
+    - show_all=False: tylko rekordy już powiązane z bieżącą dostawą
+    - show_all=True: wszystkie rekordy (najnowsze na górze)
+    """
+    did = int(delivery_id)
+    q = (query or "").strip()
+    where = []
+    params = []
+
+    if show_all:
+        where.append("1=1")
+    else:
+        where.append("delivery_id = ?")
+        params.append(did)
+
+    if q:
+        where.append(
+            "(" 
+            "COALESCE(device_name,'') LIKE ? OR "
+            "COALESCE(serial_number,'') LIKE ? OR "
+            "COALESCE(imei1,'') LIKE ? OR "
+            "COALESCE(imei2,'') LIKE ?"
+            ")"
+        )
+        like = f"%{q}%"
+        params.extend([like, like, like, like])
+
+    params.append(int(limit))
+
+    with get_conn() as conn:
+        cur = conn.cursor()
+        cur.execute(
+            f"""
+            SELECT id, received_date, item_type, device_name, serial_number, imei1, imei2,
+                   production_code, notes, created_at, COALESCE(delivery_id, 0)
+            FROM devices
+            WHERE {' AND '.join(where)}
+            ORDER BY received_date DESC, id DESC
+            LIMIT ?
+            """,
+            params,
+        )
         return cur.fetchall()
 
 

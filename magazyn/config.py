@@ -32,7 +32,20 @@ MAX_RESULTS_PER_PAGE = 100
 # ======================
 # Backup
 # ======================
-AUTO_BACKUP_INTERVAL = 3600  # 1 godzina (sekundy)
+AUTO_BACKUP_INTERVAL = int(os.getenv("MAGAZYN_AUTO_BACKUP_INTERVAL", "1800"))  # 30 minut (sekundy)
+BACKUP_ZIP_PASSWORD = os.getenv("MAGAZYN_BACKUP_ZIP_PASSWORD", "")
+MAIN_ADMIN_LOGIN = os.getenv("MAGAZYN_MAIN_ADMIN_LOGIN", "admin")
+MAIN_ADMIN_PASSWORD = os.getenv("MAGAZYN_MAIN_ADMIN_PASSWORD", "")
+REMEMBER_TOKEN_FILE = APP_DIR / "remember_token.txt"
+
+# SMTP (odzyskiwanie hasła administratora)
+SMTP_HOST = os.getenv("MAGAZYN_SMTP_HOST", "")
+SMTP_PORT = int(os.getenv("MAGAZYN_SMTP_PORT", "587"))
+SMTP_USERNAME = os.getenv("MAGAZYN_SMTP_USERNAME", "")
+SMTP_PASSWORD = os.getenv("MAGAZYN_SMTP_PASSWORD", "")
+SMTP_USE_TLS = os.getenv("MAGAZYN_SMTP_USE_TLS", "1") == "1"
+SMTP_FROM = os.getenv("MAGAZYN_SMTP_FROM", SMTP_USERNAME or "")
+RESET_CODE_TTL_MINUTES = int(os.getenv("MAGAZYN_RESET_CODE_TTL_MINUTES", "15"))
 
 # ======================
 # Typy pozycji (PRZYJĘCIA)

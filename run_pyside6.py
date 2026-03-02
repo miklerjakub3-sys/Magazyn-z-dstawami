@@ -11,7 +11,7 @@ from magazyn.log import install_excepthook, get_logger
 from magazyn.config import ensure_dirs, REMEMBER_TOKEN_FILE
 from magazyn.ui.splash import make_splash
 from magazyn.ui.main_window import MainWindow
-from magazyn.ui.login_dialog import LoginDialog
+from magazyn.ui.login_dialog import LoginDialog, AdminBootstrapDialog
 
 log = get_logger("magazyn")
 
@@ -42,6 +42,10 @@ def main() -> int:
     if not user:
         # Najpierw pokaż splash, potem przejdź do logowania (bez chowania pod splash screen).
         splash.close()
+        if svc.is_initial_admin_setup_required():
+            bootstrap = AdminBootstrapDialog(svc)
+            if bootstrap.exec() != QDialog.DialogCode.Accepted:
+                return 0
         app.processEvents()
         login_dialog = LoginDialog(svc)
         while True:

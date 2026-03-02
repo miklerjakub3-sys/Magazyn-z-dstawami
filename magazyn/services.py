@@ -48,6 +48,13 @@ class MagazynService:
     def authenticate_user(self, login: str, password: str):
         return database.authenticate_user(login, password)
 
+    def is_initial_admin_setup_required(self) -> bool:
+        return database.is_initial_admin_setup_required()
+
+    def bootstrap_admin_account(self, login: str, password: str) -> None:
+        database.bootstrap_admin_account(login, password)
+
+
     def create_remember_token(self, user_id: int, days_valid: int = 30) -> str:
         return database.create_remember_token(user_id, days_valid=days_valid)
 

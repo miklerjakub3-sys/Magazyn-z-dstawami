@@ -281,6 +281,9 @@ class SettingsPage(QWidget):
             return
 
         entered_password = password.text().strip() or BACKUP_ZIP_PASSWORD
+        if not entered_password:
+            QMessageBox.warning(self, "Backup", "Backup jest wyłączony: brak MAGAZYN_BACKUP_ZIP_PASSWORD.")
+            return
         try:
             ok = self.svc.restore_backup(path, password=entered_password)
         except PermissionError:
@@ -346,6 +349,9 @@ class SettingsPage(QWidget):
         if d.exec() != QDialog.DialogCode.Accepted:
             return
         admin_password, login, password, role_id = d.get_data()
+        if not MAIN_ADMIN_PASSWORD:
+            QMessageBox.warning(self, "Użytkownicy", "Brak skonfigurowanego MAGAZYN_ADMIN_MASTER_PASSWORD.")
+            return
         if admin_password != MAIN_ADMIN_PASSWORD:
             QMessageBox.warning(self, "Użytkownicy", "Nieprawidłowe hasło główne.")
             return
@@ -381,6 +387,9 @@ class SettingsPage(QWidget):
         q.layout().addWidget(p, 1, 1)
         q.setStandardButtons(QMessageBox.Ok | QMessageBox.Cancel)
         if q.exec() != QMessageBox.Ok:
+            return
+        if not MAIN_ADMIN_PASSWORD:
+            QMessageBox.warning(self, "Użytkownicy", "Brak skonfigurowanego MAGAZYN_ADMIN_MASTER_PASSWORD.")
             return
         if p.text().strip() != MAIN_ADMIN_PASSWORD:
             QMessageBox.warning(self, "Użytkownicy", "Nieprawidłowe hasło główne.")

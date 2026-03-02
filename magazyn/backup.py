@@ -67,6 +67,8 @@ class BackupManager:
                     if p.is_file():
                         z.write(p, arcname=str(Path(arc_root) / p.relative_to(folder)))
 
+            if not BACKUP_ZIP_PASSWORD:
+                raise RuntimeError("Backup ZIP password is not configured (MAGAZYN_BACKUP_ZIP_PASSWORD).")
             if pyzipper is not None:
                 with pyzipper.AESZipFile(
                     backup_path,
@@ -156,7 +158,11 @@ class BackupManager:
             tmp_dir = self.backup_dir / f"_restore_tmp_{int(time.time())}"
             tmp_dir.mkdir(parents=True, exist_ok=True)
 
+            if not BACKUP_ZIP_PASSWORD:
+                raise RuntimeError("Backup ZIP password is not configured (MAGAZYN_BACKUP_ZIP_PASSWORD).")
             pwd = (password or BACKUP_ZIP_PASSWORD).encode("utf-8")
+            if not BACKUP_ZIP_PASSWORD:
+                raise RuntimeError("Backup ZIP password is not configured (MAGAZYN_BACKUP_ZIP_PASSWORD).")
             if pyzipper is not None:
                 with pyzipper.AESZipFile(bp, "r") as z:
                     z.extractall(tmp_dir, pwd=pwd)

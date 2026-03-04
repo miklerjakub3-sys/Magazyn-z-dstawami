@@ -39,17 +39,28 @@ log = get_logger("magazyn.ui.deliveries")
 
 
 class OptionalDateEdit(QDateEdit):
+    MIN_ALLOWED_DATE = QDate(2025, 1, 1)
+    EMPTY_SENTINEL_DATE = QDate(2024, 12, 31)
+
     def __init__(self) -> None:
         super().__init__()
         self.setCalendarPopup(True)
         self.setDisplayFormat("yyyy-MM-dd")
-        self.setMinimumDate(QDate(1900, 1, 1))
         self.setSpecialValueText("— wybierz datę —")
+        self.setDateRange(self.EMPTY_SENTINEL_DATE, QDate(7999, 12, 31))
+        self.setMinimumDate(self.EMPTY_SENTINEL_DATE)
         self.setDate(self.minimumDate())
+        self.dateChanged.connect(self._clamp_if_needed)
+
+    def _clamp_if_needed(self, value: QDate) -> None:
+        if value != self.minimumDate() and value < self.MIN_ALLOWED_DATE:
+            self.blockSignals(True)
+            self.setDate(self.MIN_ALLOWED_DATE)
+            self.blockSignals(False)
 
     def showPopup(self) -> None:
         if self.date() == self.minimumDate():
-            self.setDate(QDate.currentDate())
+            self.setDate(self.MIN_ALLOWED_DATE)
         super().showPopup()
 
 

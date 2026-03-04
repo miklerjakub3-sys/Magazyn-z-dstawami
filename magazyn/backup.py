@@ -25,8 +25,6 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional, List, Tuple, Any
 
-import pyzipper  # type: ignore
-
 from .config import BACKUP_DIR, DB_PATH, AUTO_BACKUP_INTERVAL, ATTACH_DIR, DELIVERY_ATTACH_DIR, BACKUP_ZIP_PASSWORD
 from .log import get_logger
 

@@ -361,3 +361,21 @@ MigrationBackup/
 
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
+# Python / PyInstaller artifacts
+build/
+dist/
+*.toc
+warn-*.txt
+*.py[cod]
+*.pyo
+*.pyd
+.pytest_cache/
+.venv/
+venv/
+.env
+
+# Local databases / runtime files
+*.db
+*.sqlite
+*.sqlite3
+*.log

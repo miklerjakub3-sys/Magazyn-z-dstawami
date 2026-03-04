@@ -14,6 +14,10 @@ from datetime import datetime
 from typing import Optional, List, Tuple
 from .config import DB_PATH, DELIVERY_ATTACH_DIR, DELIVERY_TYPES
 from .utils import one_line, validate_ymd, copy_attachment_for_delivery
+from .log import get_logger
+
+
+log = get_logger("magazyn.db")
 
 
 # =======================
@@ -177,6 +181,10 @@ def init_db():
 PBKDF2_ROUNDS = 240000
 
 
+def normalize_login(login: str) -> str:
+    return (login or "").strip().lower()
+
+
 def _password_hash(password: str, salt: Optional[bytes] = None) -> str:
     s = salt or secrets.token_bytes(16)
     digest = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), s, PBKDF2_ROUNDS)
@@ -252,12 +260,42 @@ def seed_auth_defaults() -> None:
 
         cur.execute("SELECT COUNT(1) FROM app_users")
         if int(cur.fetchone()[0]) == 0:
-            cur.execute(
-                "INSERT INTO app_users(login, password_hash, role_id, created_at) VALUES (?, ?, ?, ?)",
-                ("Jakub", _password_hash("Mikler2000praca"), admin_role_id, now),
+            log.warning(
+                "Brak użytkowników w tabeli app_users. Wymagana jest ręczna konfiguracja konta administratora."
             )
         conn.commit()
 
+
+
+
+def is_initial_admin_setup_required() -> bool:
+    with get_conn() as conn:
+        cur = conn.cursor()
+        cur.execute("SELECT COUNT(1) FROM app_users")
+        return int(cur.fetchone()[0]) == 0
+
+
+def bootstrap_admin_account(login: str, password: str) -> None:
+    login_normalized = normalize_login(login)
+    if not login_normalized:
+        raise ValueError("Login administratora jest wymagany.")
+    if len((password or "").strip()) < 8:
+        raise ValueError("Hasło administratora musi mieć co najmniej 8 znaków.")
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    with get_conn() as conn:
+        cur = conn.cursor()
+        cur.execute("SELECT COUNT(1) FROM app_users")
+        if int(cur.fetchone()[0]) > 0:
+            raise RuntimeError("Konto administratora jest już skonfigurowane.")
+        cur.execute("SELECT id FROM app_roles WHERE name=?", ("Administrator",))
+        row = cur.fetchone()
+        if not row:
+            raise RuntimeError("Brak roli Administrator.")
+        cur.execute(
+            "INSERT INTO app_users(login, password_hash, role_id, created_at) VALUES (?, ?, ?, ?)",
+            (login_normalized, _password_hash(password), int(row[0]), now),
+        )
+        conn.commit()
 
 def authenticate_user(login: str, password: str):
     with get_conn() as conn:
@@ -373,11 +411,14 @@ def role_permission_keys(role_id: int) -> List[str]:
 
 
 def create_user(login: str, password: str, role_id: int) -> None:
+    login_normalized = normalize_login(login)
+    if not login_normalized:
+        raise ValueError("Login jest wymagany.")
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     with get_conn() as conn:
         conn.execute(
             "INSERT INTO app_users(login, password_hash, role_id, created_at) VALUES (?, ?, ?, ?)",
-            ((login or "").strip(), _password_hash(password), int(role_id), now),
+            (login_normalized, _password_hash(password), int(role_id), now),
         )
         conn.commit()
 
@@ -501,9 +542,8 @@ def migrate_db():
             if col not in existing:
                 try:
                     cur.execute(f"ALTER TABLE devices ADD COLUMN {col} {coltype}")
-                except Exception as e:
-                    from .log import get_logger
-                    get_logger("magazyn.db").exception(f"Nie można dodać kolumny {col}")
+                except Exception:
+                    log.exception(f"Nie można dodać kolumny {col}")
 
         cur.execute("UPDATE devices SET item_type='device' WHERE item_type IS NULL OR item_type=''")
 
@@ -525,9 +565,8 @@ def migrate_db():
             if col not in dex:
                 try:
                     cur.execute(f"ALTER TABLE deliveries ADD COLUMN {col} {coltype}")
-                except Exception as e:
-                    from .log import get_logger
-                    get_logger("magazyn.db").exception(f"Nie można dodać kolumny {col}")
+                except Exception:
+                    log.exception(f"Nie można dodać kolumny {col}")
 
         conn.commit()
 
@@ -544,8 +583,152 @@ def migrate_db():
                 try:
                     cur.execute(f"ALTER TABLE app_users ADD COLUMN {col} {coltype}")
                 except Exception:
-                    from .log import get_logger
-                    get_logger("magazyn.db").exception(f"Nie można dodać kolumny {col}")
+                    log.exception(f"Nie można dodać kolumny {col}")
+
+        _normalize_existing_logins(cur)
+        _enforce_case_insensitive_login_unique(cur)
+        _rebuild_deliveries_with_constraints(cur)
+        _rebuild_devices_with_constraints(cur)
+        conn.commit()
+
+
+def _normalize_existing_logins(cur: sqlite3.Cursor) -> None:
+    cur.execute("SELECT id, login FROM app_users ORDER BY id")
+    for user_id, login in cur.fetchall():
+        normalized = normalize_login(str(login or ""))
+        if normalized and normalized != (login or ""):
+            cur.execute("UPDATE app_users SET login=? WHERE id=?", (normalized, int(user_id)))
+
+
+def _enforce_case_insensitive_login_unique(cur: sqlite3.Cursor) -> None:
+    cur.execute(
+        """
+        SELECT LOWER(login), COUNT(1)
+        FROM app_users
+        GROUP BY LOWER(login)
+        HAVING COUNT(1) > 1
+        """
+    )
+    if cur.fetchone():
+        raise RuntimeError("Nie można utworzyć indeksu unikalnego LOWER(login): istnieją duplikaty loginów.")
+    cur.execute(
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_app_users_login_lower_unique ON app_users(LOWER(login))"
+    )
+
+
+def _rebuild_deliveries_with_constraints(cur: sqlite3.Cursor) -> None:
+    cur.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='deliveries'")
+    row = cur.fetchone()
+    sql = (row[0] or "") if row else ""
+    required_fragments = [
+        "CHECK (invoice_vat IN (0,1))",
+        "CHECK (delivery_date GLOB '[0-9][0-9][0-9][0-9]-[0-1][0-9]-[0-3][0-9]')",
+        "CHECK (created_at GLOB '[0-9][0-9][0-9][0-9]-[0-1][0-9]-[0-3][0-9]*')",
+    ]
+    if all(fragment in sql for fragment in required_fragments):
+        return
+
+    cur.execute("ALTER TABLE deliveries RENAME TO deliveries_old")
+    cur.execute(
+        """
+        CREATE TABLE deliveries (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            delivery_date TEXT NOT NULL CHECK (delivery_date GLOB '[0-9][0-9][0-9][0-9]-[0-1][0-9]-[0-3][0-9]'),
+            sender_name TEXT,
+            courier_name TEXT,
+            delivery_type TEXT NOT NULL,
+            tracking_number TEXT,
+            invoice_vat INTEGER NOT NULL DEFAULT 0 CHECK (invoice_vat IN (0,1)),
+            notes TEXT,
+            created_at TEXT NOT NULL CHECK (created_at GLOB '[0-9][0-9][0-9][0-9]-[0-1][0-9]-[0-3][0-9]*'),
+            updated_at TEXT
+        )
+        """
+    )
+    cur.execute(
+        """
+        INSERT INTO deliveries(id, delivery_date, sender_name, courier_name, delivery_type, tracking_number, invoice_vat, notes, created_at, updated_at)
+        SELECT
+            id,
+            CASE
+                WHEN delivery_date GLOB '[0-9][0-9][0-9][0-9]-[0-1][0-9]-[0-3][0-9]' THEN delivery_date
+                ELSE substr(COALESCE(delivery_date,''), 1, 10)
+            END,
+            sender_name,
+            courier_name,
+            delivery_type,
+            tracking_number,
+            CASE WHEN invoice_vat = 1 THEN 1 ELSE 0 END,
+            notes,
+            CASE
+                WHEN created_at GLOB '[0-9][0-9][0-9][0-9]-[0-1][0-9]-[0-3][0-9]*' THEN created_at
+                ELSE datetime('now')
+            END,
+            updated_at
+        FROM deliveries_old
+        """
+    )
+    cur.execute("DROP TABLE deliveries_old")
+
+
+def _rebuild_devices_with_constraints(cur: sqlite3.Cursor) -> None:
+    cur.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='devices'")
+    row = cur.fetchone()
+    sql = (row[0] or "") if row else ""
+    required_fragments = [
+        "CHECK (item_type IN ('device','accessory'))",
+        "CHECK (received_date GLOB '[0-9][0-9][0-9][0-9]-[0-1][0-9]-[0-3][0-9]')",
+        "CHECK (created_at GLOB '[0-9][0-9][0-9][0-9]-[0-1][0-9]-[0-3][0-9]*')",
+    ]
+    if all(fragment in sql for fragment in required_fragments):
+        return
+
+    cur.execute("ALTER TABLE devices RENAME TO devices_old")
+    cur.execute(
+        """
+        CREATE TABLE devices (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            received_date TEXT NOT NULL CHECK (received_date GLOB '[0-9][0-9][0-9][0-9]-[0-1][0-9]-[0-3][0-9]'),
+            item_type TEXT NOT NULL DEFAULT 'device' CHECK (item_type IN ('device','accessory')),
+            device_name TEXT,
+            serial_number TEXT,
+            imei1 TEXT,
+            imei2 TEXT,
+            production_code TEXT,
+            notes TEXT,
+            delivery_id INTEGER,
+            created_at TEXT NOT NULL CHECK (created_at GLOB '[0-9][0-9][0-9][0-9]-[0-1][0-9]-[0-3][0-9]*'),
+            updated_at TEXT,
+            FOREIGN KEY(delivery_id) REFERENCES deliveries(id) ON DELETE SET NULL
+        )
+        """
+    )
+    cur.execute(
+        """
+        INSERT INTO devices(id, received_date, item_type, device_name, serial_number, imei1, imei2, production_code, notes, delivery_id, created_at, updated_at)
+        SELECT
+            id,
+            CASE
+                WHEN received_date GLOB '[0-9][0-9][0-9][0-9]-[0-1][0-9]-[0-3][0-9]' THEN received_date
+                ELSE substr(COALESCE(received_date,''), 1, 10)
+            END,
+            CASE WHEN item_type IN ('device','accessory') THEN item_type ELSE 'device' END,
+            device_name,
+            serial_number,
+            imei1,
+            imei2,
+            production_code,
+            notes,
+            delivery_id,
+            CASE
+                WHEN created_at GLOB '[0-9][0-9][0-9][0-9]-[0-1][0-9]-[0-3][0-9]*' THEN created_at
+                ELSE datetime('now')
+            END,
+            updated_at
+        FROM devices_old
+        """
+    )
+    cur.execute("DROP TABLE devices_old")
 
 
 # =======================

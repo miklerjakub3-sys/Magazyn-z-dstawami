@@ -14,8 +14,53 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
 )
 
+from ..config import MAIN_ADMIN_LOGIN
 from ..services import MagazynService
 from .splash import get_logo_pixmap
+
+
+class AdminBootstrapDialog(QDialog):
+    def __init__(self, svc: MagazynService, parent=None) -> None:
+        super().__init__(parent)
+        self.svc = svc
+        self.setWindowTitle("Pierwsza konfiguracja administratora")
+        lay = QVBoxLayout(self)
+        info = QLabel("Nie znaleziono użytkowników. Skonfiguruj konto administratora.")
+        info.setWordWrap(True)
+        lay.addWidget(info)
+
+        form = QFormLayout()
+        self.in_login = QLineEdit(MAIN_ADMIN_LOGIN)
+        self.in_password = QLineEdit()
+        self.in_password.setEchoMode(QLineEdit.Password)
+        self.in_password2 = QLineEdit()
+        self.in_password2.setEchoMode(QLineEdit.Password)
+        form.addRow("Login admina:", self.in_login)
+        form.addRow("Hasło:", self.in_password)
+        form.addRow("Powtórz hasło:", self.in_password2)
+        lay.addLayout(form)
+
+        row = QHBoxLayout()
+        btn_cancel = QPushButton("Anuluj")
+        btn_ok = QPushButton("Utwórz konto")
+        btn_ok.setProperty("role", "primary")
+        row.addStretch(1)
+        row.addWidget(btn_cancel)
+        row.addWidget(btn_ok)
+        lay.addLayout(row)
+        btn_cancel.clicked.connect(self.reject)
+        btn_ok.clicked.connect(self.on_submit)
+
+    def on_submit(self) -> None:
+        if self.in_password.text() != self.in_password2.text():
+            QMessageBox.warning(self, "Konfiguracja", "Hasła nie są identyczne.")
+            return
+        try:
+            self.svc.bootstrap_admin_account(self.in_login.text().strip(), self.in_password.text())
+            QMessageBox.information(self, "Konfiguracja", "Konto administratora zostało utworzone.")
+            self.accept()
+        except Exception as e:
+            QMessageBox.warning(self, "Konfiguracja", str(e))
 
 
 class PasswordRecoveryDialog(QDialog):

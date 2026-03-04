@@ -17,20 +17,66 @@ import time
 import threading
 import gzip
 import shutil
+import sqlite3
+import stat
 import zipfile
 from datetime import datetime
 from pathlib import Path
 from typing import Optional, List, Tuple
 
+import pyzipper  # type: ignore
+
 from .config import BACKUP_DIR, DB_PATH, AUTO_BACKUP_INTERVAL, ATTACH_DIR, DELIVERY_ATTACH_DIR, BACKUP_ZIP_PASSWORD
 from .log import get_logger
 
-try:
-    import pyzipper  # type: ignore
-except Exception:  # pragma: no cover - fallback środowiskowy
-    pyzipper = None
-
 log = get_logger("magazyn.backup")
+MAX_EXTRACTED_FILE_SIZE = 100 * 1024 * 1024
+MAX_EXTRACTED_TOTAL_SIZE = 500 * 1024 * 1024
+
+
+def _is_zip_symlink(member: zipfile.ZipInfo) -> bool:
+    return stat.S_ISLNK((member.external_attr >> 16) & 0xFFFF)
+
+
+def safe_extract(
+    zf: zipfile.ZipFile,
+    target_dir: Path,
+    *,
+    max_file_size: int = MAX_EXTRACTED_FILE_SIZE,
+    max_total_size: int = MAX_EXTRACTED_TOTAL_SIZE,
+) -> None:
+    """Bezpiecznie rozpakowuje archiwum ZIP bez ryzyka Zip Slip/symlinków."""
+    base = target_dir.resolve()
+    total_size = 0
+
+    for member in zf.infolist():
+        member_name = member.filename
+        if member_name.startswith("/"):
+            raise ValueError(f"Niedozwolona ścieżka absolutna w archiwum: {member_name}")
+
+        member_path = Path(member_name)
+        if any(part == ".." for part in member_path.parts):
+            raise ValueError(f"Niedozwolona ścieżka traversal w archiwum: {member_name}")
+        if _is_zip_symlink(member):
+            raise ValueError(f"Niedozwolony symlink w archiwum: {member_name}")
+
+        destination = (base / member_path).resolve()
+        if not str(destination).startswith(f"{base}{os.sep}") and destination != base:
+            raise ValueError(f"Niedozwolona ścieżka docelowa w archiwum: {member_name}")
+
+        if member.is_dir():
+            destination.mkdir(parents=True, exist_ok=True)
+            continue
+
+        if member.file_size > max_file_size:
+            raise ValueError(f"Plik w archiwum przekracza limit rozmiaru: {member_name}")
+        total_size += member.file_size
+        if total_size > max_total_size:
+            raise ValueError("Łączny rozmiar danych w archiwum przekracza limit")
+
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        with zf.open(member, "r") as src, destination.open("wb") as dst:
+            shutil.copyfileobj(src, dst)
 
 
 class BackupManager:
@@ -55,9 +101,13 @@ class BackupManager:
             backup_name = f"magazyn_backup_{prefix}_{timestamp}.zip"
             backup_path = self.backup_dir / backup_name
 
-            # przygotuj gzip bazy w temp
+            # przygotuj spójny snapshot bazy (bez ryzyka uszkodzeń w trybie WAL)
+            tmp_db = self.backup_dir / f"_tmp_db_snapshot_{timestamp}.db"
             tmp_gz = self.backup_dir / f"_tmp_db_{timestamp}.db.gz"
-            with self.db_path.open("rb") as f_in, gzip.open(tmp_gz, "wb") as f_out:
+            with sqlite3.connect(str(self.db_path)) as src_conn, sqlite3.connect(str(tmp_db)) as dst_conn:
+                src_conn.backup(dst_conn)
+
+            with tmp_db.open("rb") as f_in, gzip.open(tmp_gz, "wb") as f_out:
                 shutil.copyfileobj(f_in, f_out)
 
             def add_dir(z: zipfile.ZipFile, folder: Path, arc_root: str) -> None:
@@ -67,26 +117,22 @@ class BackupManager:
                     if p.is_file():
                         z.write(p, arcname=str(Path(arc_root) / p.relative_to(folder)))
 
-            if pyzipper is not None:
-                with pyzipper.AESZipFile(
-                    backup_path,
-                    "w",
-                    compression=zipfile.ZIP_DEFLATED,
-                    encryption=pyzipper.WZ_AES,
-                ) as z:
-                    z.setpassword(BACKUP_ZIP_PASSWORD.encode("utf-8"))
-                    z.write(tmp_gz, arcname="db/magazyn.db.gz")
-                    add_dir(z, Path(ATTACH_DIR), "attachments")
-                    add_dir(z, Path(DELIVERY_ATTACH_DIR), "delivery_attachments")
-            else:
-                with zipfile.ZipFile(backup_path, "w", compression=zipfile.ZIP_DEFLATED) as z:
-                    z.setpassword(BACKUP_ZIP_PASSWORD.encode("utf-8"))
-                    z.write(tmp_gz, arcname="db/magazyn.db.gz")
-                    add_dir(z, Path(ATTACH_DIR), "attachments")
-                    add_dir(z, Path(DELIVERY_ATTACH_DIR), "delivery_attachments")
+            if not BACKUP_ZIP_PASSWORD:
+                raise RuntimeError("Backup ZIP password is not configured (MAGAZYN_BACKUP_ZIP_PASSWORD).")
+            with pyzipper.AESZipFile(
+                backup_path,
+                "w",
+                compression=zipfile.ZIP_DEFLATED,
+                encryption=pyzipper.WZ_AES,
+            ) as z:
+                z.setpassword(BACKUP_ZIP_PASSWORD.encode("utf-8"))
+                z.write(tmp_gz, arcname="db/magazyn.db.gz")
+                add_dir(z, Path(ATTACH_DIR), "attachments")
+                add_dir(z, Path(DELIVERY_ATTACH_DIR), "delivery_attachments")
 
             try:
                 tmp_gz.unlink(missing_ok=True)
+                tmp_db.unlink(missing_ok=True)
             except Exception:
                 pass
 
@@ -157,12 +203,11 @@ class BackupManager:
             tmp_dir.mkdir(parents=True, exist_ok=True)
 
             pwd = (password or BACKUP_ZIP_PASSWORD).encode("utf-8")
-            if pyzipper is not None:
-                with pyzipper.AESZipFile(bp, "r") as z:
-                    z.extractall(tmp_dir, pwd=pwd)
-            else:
-                with zipfile.ZipFile(bp, "r") as z:
-                    z.extractall(tmp_dir, pwd=pwd)
+            if not BACKUP_ZIP_PASSWORD:
+                raise RuntimeError("Backup ZIP password is not configured (MAGAZYN_BACKUP_ZIP_PASSWORD).")
+            with pyzipper.AESZipFile(bp, "r") as z:
+                z.setpassword(pwd)
+                safe_extract(z, tmp_dir)
 
             # restore db
             gz = tmp_dir / "db" / "magazyn.db.gz"

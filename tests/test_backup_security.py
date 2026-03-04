@@ -97,11 +97,12 @@ def test_safe_extract_blocks_zip_traversal(tmp_path):
     import magazyn.backup as backup
 
     zip_path = tmp_path / "bad.zip"
-    with backup.pyzipper.AESZipFile(zip_path, "w", compression=backup.zipfile.ZIP_DEFLATED, encryption=backup.pyzipper.WZ_AES) as zf:
+    pyzipper = backup._get_pyzipper()
+    with pyzipper.AESZipFile(zip_path, "w", compression=backup.zipfile.ZIP_DEFLATED, encryption=pyzipper.WZ_AES) as zf:
         zf.setpassword(b"x")
         zf.writestr("../evil.txt", "boom")
 
-    with backup.pyzipper.AESZipFile(zip_path, "r") as zf:
+    with pyzipper.AESZipFile(zip_path, "r") as zf:
         zf.setpassword(b"x")
         with pytest.raises(ValueError):
             backup.safe_extract(zf, tmp_path / "out")

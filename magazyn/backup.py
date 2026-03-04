@@ -20,9 +20,10 @@ import shutil
 import sqlite3
 import stat
 import zipfile
+import importlib
 from datetime import datetime
 from pathlib import Path
-from typing import Optional, List, Tuple
+from typing import Optional, List, Tuple, Any
 
 import pyzipper  # type: ignore
 
@@ -32,6 +33,14 @@ from .log import get_logger
 log = get_logger("magazyn.backup")
 MAX_EXTRACTED_FILE_SIZE = 100 * 1024 * 1024
 MAX_EXTRACTED_TOTAL_SIZE = 500 * 1024 * 1024
+
+def _get_pyzipper() -> Any:
+    try:
+        return importlib.import_module("pyzipper")
+    except Exception as exc:
+        raise RuntimeError(
+            "Brak zależności 'pyzipper'. Zainstaluj wymagania: pip install -r requirements.txt"
+        ) from exc
 
 
 def _is_zip_symlink(member: zipfile.ZipInfo) -> bool:
@@ -119,6 +128,7 @@ class BackupManager:
 
             if not BACKUP_ZIP_PASSWORD:
                 raise RuntimeError("Backup ZIP password is not configured (MAGAZYN_BACKUP_ZIP_PASSWORD).")
+            pyzipper = _get_pyzipper()
             with pyzipper.AESZipFile(
                 backup_path,
                 "w",
@@ -205,6 +215,7 @@ class BackupManager:
             pwd = (password or BACKUP_ZIP_PASSWORD).encode("utf-8")
             if not BACKUP_ZIP_PASSWORD:
                 raise RuntimeError("Backup ZIP password is not configured (MAGAZYN_BACKUP_ZIP_PASSWORD).")
+            pyzipper = _get_pyzipper()
             with pyzipper.AESZipFile(bp, "r") as z:
                 z.setpassword(pwd)
                 safe_extract(z, tmp_dir)

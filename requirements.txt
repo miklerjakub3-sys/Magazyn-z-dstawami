@@ -3,3 +3,5 @@ reportlab
 pillow
 pytest
 pyinstaller
+pyzipper
+pytest-qt

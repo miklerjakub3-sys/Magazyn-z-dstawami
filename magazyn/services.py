@@ -14,6 +14,7 @@ from dataclasses import dataclass
 import hashlib
 import secrets
 import smtplib
+import ssl
 from datetime import datetime, timedelta
 from email.message import EmailMessage
 from typing import List, Optional, Tuple, Sequence, Any
@@ -151,7 +152,7 @@ class MagazynService:
         exp = (datetime.now() + timedelta(minutes=max(5, int(RESET_CODE_TTL_MINUTES)))).strftime("%Y-%m-%d %H:%M:%S")
         ok = database.set_password_reset_code(MAIN_ADMIN_LOGIN, email, code_hash, exp)
         if not ok:
-            raise ValueError("Podany e-mail nie jest przypisany do konta administratora.")
+            return
 
         if not SMTP_HOST or not SMTP_FROM:
             raise RuntimeError("SMTP nie jest skonfigurowane. Uzupełnij zmienne MAGAZYN_SMTP_*.")
@@ -170,10 +171,17 @@ class MagazynService:
 
         with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=20) as smtp:
             if SMTP_USE_TLS:
-                smtp.starttls()
+                smtp.starttls(context=ssl.create_default_context())
             if SMTP_USERNAME:
                 smtp.login(SMTP_USERNAME, SMTP_PASSWORD)
             smtp.send_message(msg)
+
+    def generate_admin_recovery_codes(self) -> List[str]:
+        self._require("users.manage")
+        codes = [secrets.token_hex(4).upper() for _ in range(10)]
+        hashes = [hashlib.sha256(code.encode("utf-8")).hexdigest() for code in codes]
+        database.replace_admin_recovery_codes(MAIN_ADMIN_LOGIN, hashes)
+        return codes
 
     def reset_admin_password_with_code(self, email: str, code: str, new_password: str) -> None:
         if len((new_password or "").strip()) < 8:
@@ -182,7 +190,16 @@ class MagazynService:
         packed = database._password_hash(new_password)
         ok = database.consume_password_reset_code(MAIN_ADMIN_LOGIN, email, code_hash, packed)
         if not ok:
-            raise ValueError("Kod jest nieprawidłowy lub wygasł.")
+            raise ValueError("Kod jest nieprawidłowy, wygasł lub chwilowo zablokowany.")
+
+    def reset_admin_password_with_recovery_code(self, code: str, new_password: str) -> None:
+        if len((new_password or "").strip()) < 8:
+            raise ValueError("Nowe hasło musi mieć co najmniej 8 znaków.")
+        code_hash = hashlib.sha256((code or "").strip().encode("utf-8")).hexdigest()
+        packed = database._password_hash(new_password)
+        ok = database.consume_admin_recovery_code(MAIN_ADMIN_LOGIN, code_hash, packed)
+        if not ok:
+            raise ValueError("Kod odzyskiwania jest nieprawidłowy, zużyty lub chwilowo zablokowany.")
 
     # --- Devices ---
     def search_devices(

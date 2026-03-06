@@ -212,7 +212,7 @@ class BackupManager:
 
             pwd = (password or BACKUP_ZIP_PASSWORD).encode("utf-8")
             if not BACKUP_ZIP_PASSWORD:
-                raise RuntimeError("Backup ZIP password is not configured (MAGAZYN_BACKUP_ZIP_PASSWORD).")
+                raise RuntimeError("Backup ZIP password is not configured (Mikler2000praca).")
             pyzipper = _get_pyzipper()
             with pyzipper.AESZipFile(bp, "r") as z:
                 z.setpassword(pwd)

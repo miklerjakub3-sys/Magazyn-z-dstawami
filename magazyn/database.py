@@ -10,7 +10,7 @@ import shutil
 import hashlib
 import hmac
 import secrets
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Optional, List, Tuple
 from .config import DB_PATH, DELIVERY_ATTACH_DIR, DELIVERY_TYPES
 from .utils import one_line, validate_ymd, copy_attachment_for_delivery
@@ -18,6 +18,11 @@ from .log import get_logger
 
 
 log = get_logger("magazyn.db")
+
+LOGIN_MAX_ATTEMPTS = 5
+LOGIN_LOCKOUT_MINUTES = 5
+RESET_MAX_ATTEMPTS = 5
+RESET_LOCKOUT_MINUTES = 10
 
 
 # =======================
@@ -147,6 +152,26 @@ def init_db():
                 token_hash TEXT NOT NULL,
                 created_at TEXT NOT NULL,
                 expires_at TEXT NOT NULL,
+                FOREIGN KEY(user_id) REFERENCES app_users(id) ON DELETE CASCADE
+            )
+        """)
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS app_auth_state (
+                login_key TEXT PRIMARY KEY,
+                failed_login_attempts INTEGER NOT NULL DEFAULT 0,
+                login_locked_until TEXT,
+                failed_reset_attempts INTEGER NOT NULL DEFAULT 0,
+                reset_locked_until TEXT,
+                updated_at TEXT NOT NULL
+            )
+        """)
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS app_admin_recovery_codes (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                code_hash TEXT NOT NULL UNIQUE,
+                created_at TEXT NOT NULL,
+                used_at TEXT,
                 FOREIGN KEY(user_id) REFERENCES app_users(id) ON DELETE CASCADE
             )
         """)
@@ -297,9 +322,93 @@ def bootstrap_admin_account(login: str, password: str) -> None:
         )
         conn.commit()
 
+
+def _now() -> datetime:
+    return datetime.now()
+
+
+def _fmt_dt(value: datetime) -> str:
+    return value.strftime("%Y-%m-%d %H:%M:%S")
+
+
+def _parse_dt(value: Optional[str]) -> Optional[datetime]:
+    if not value:
+        return None
+    try:
+        return datetime.strptime(value, "%Y-%m-%d %H:%M:%S")
+    except Exception:
+        return None
+
+
+def _get_or_create_auth_state(cur: sqlite3.Cursor, login_key: str):
+    now = _fmt_dt(_now())
+    cur.execute(
+        "INSERT OR IGNORE INTO app_auth_state(login_key, updated_at) VALUES (?, ?)",
+        (login_key, now),
+    )
+    cur.execute(
+        "SELECT failed_login_attempts, login_locked_until, failed_reset_attempts, reset_locked_until FROM app_auth_state WHERE login_key=?",
+        (login_key,),
+    )
+    return cur.fetchone()
+
+
+def _is_locked(locked_until: Optional[str]) -> bool:
+    lock_dt = _parse_dt(locked_until)
+    return bool(lock_dt and lock_dt > _now())
+
+
+def _register_login_failure(cur: sqlite3.Cursor, login_key: str) -> None:
+    state = _get_or_create_auth_state(cur, login_key)
+    failed = int(state[0] or 0) + 1
+    lock_until = None
+    if failed >= LOGIN_MAX_ATTEMPTS:
+        lock_until = _fmt_dt(_now() + timedelta(minutes=LOGIN_LOCKOUT_MINUTES))
+        failed = 0
+    cur.execute(
+        "UPDATE app_auth_state SET failed_login_attempts=?, login_locked_until=?, updated_at=? WHERE login_key=?",
+        (failed, lock_until, _fmt_dt(_now()), login_key),
+    )
+
+
+def _clear_login_failures(cur: sqlite3.Cursor, login_key: str) -> None:
+    cur.execute(
+        "UPDATE app_auth_state SET failed_login_attempts=0, login_locked_until=NULL, updated_at=? WHERE login_key=?",
+        (_fmt_dt(_now()), login_key),
+    )
+
+
+def _register_reset_failure(cur: sqlite3.Cursor, login_key: str) -> None:
+    state = _get_or_create_auth_state(cur, login_key)
+    failed = int(state[2] or 0) + 1
+    lock_until = None
+    if failed >= RESET_MAX_ATTEMPTS:
+        lock_until = _fmt_dt(_now() + timedelta(minutes=RESET_LOCKOUT_MINUTES))
+        failed = 0
+    cur.execute(
+        "UPDATE app_auth_state SET failed_reset_attempts=?, reset_locked_until=?, updated_at=? WHERE login_key=?",
+        (failed, lock_until, _fmt_dt(_now()), login_key),
+    )
+
+
+def _clear_reset_failures(cur: sqlite3.Cursor, login_key: str) -> None:
+    cur.execute(
+        "UPDATE app_auth_state SET failed_reset_attempts=0, reset_locked_until=NULL, updated_at=? WHERE login_key=?",
+        (_fmt_dt(_now()), login_key),
+    )
+
 def authenticate_user(login: str, password: str):
+    login_key = normalize_login(login)
+    if not login_key:
+        return None
+
     with get_conn() as conn:
         cur = conn.cursor()
+        state = _get_or_create_auth_state(cur, login_key)
+        if _is_locked(state[1]):
+            conn.commit()
+            return None
+
         cur.execute(
             """
             SELECT u.id, u.login, u.password_hash, u.role_id, r.name, u.is_active
@@ -307,15 +416,16 @@ def authenticate_user(login: str, password: str):
             JOIN app_roles r ON r.id=u.role_id
             WHERE LOWER(u.login)=LOWER(?)
             """,
-            ((login or "").strip(),),
+            (login_key,),
         )
         row = cur.fetchone()
-        if not row:
+        if not row or int(row[5]) != 1 or not _verify_password(password, str(row[2])):
+            _register_login_failure(cur, login_key)
+            conn.commit()
             return None
-        if int(row[5]) != 1:
-            return None
-        if not _verify_password(password, str(row[2])):
-            return None
+
+        _clear_login_failures(cur, login_key)
+        conn.commit()
         return {
             "id": int(row[0]),
             "login": str(row[1]),
@@ -484,24 +594,39 @@ def get_admin_recovery_email(login: str) -> str:
 
 
 def set_password_reset_code(login: str, email: str, code_hash: str, expires_at: str) -> bool:
+    login_key = normalize_login(login)
     with get_conn() as conn:
         cur = conn.cursor()
+        state = _get_or_create_auth_state(cur, login_key)
+        if _is_locked(state[3]):
+            conn.commit()
+            return False
+
         cur.execute(
             """
             UPDATE app_users
             SET reset_code_hash=?, reset_code_expires=?
             WHERE LOWER(login)=LOWER(?) AND LOWER(COALESCE(recovery_email,''))=LOWER(?) AND is_active=1
             """,
-            (code_hash, expires_at, (login or "").strip(), (email or "").strip()),
+            (code_hash, expires_at, login_key, (email or "").strip()),
         )
+        ok = cur.rowcount > 0
+        if ok:
+            _clear_reset_failures(cur, login_key)
         conn.commit()
-        return cur.rowcount > 0
+        return ok
 
 
 def consume_password_reset_code(login: str, email: str, code_hash: str, new_password_hash: str) -> bool:
-    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    login_key = normalize_login(login)
+    now = _fmt_dt(_now())
     with get_conn() as conn:
         cur = conn.cursor()
+        state = _get_or_create_auth_state(cur, login_key)
+        if _is_locked(state[3]):
+            conn.commit()
+            return False
+
         cur.execute(
             """
             UPDATE app_users
@@ -512,16 +637,120 @@ def consume_password_reset_code(login: str, email: str, code_hash: str, new_pass
               AND COALESCE(reset_code_expires,'')>=?
               AND is_active=1
             """,
-            (new_password_hash, now, (login or "").strip(), (email or "").strip(), code_hash, now),
+            (new_password_hash, now, login_key, (email or "").strip(), code_hash, now),
         )
+        ok = cur.rowcount > 0
+        if ok:
+            _clear_reset_failures(cur, login_key)
+        else:
+            _register_reset_failure(cur, login_key)
         conn.commit()
-        return cur.rowcount > 0
+        return ok
+
+
+def list_admin_recovery_code_hashes(login: str) -> List[str]:
+    with get_conn() as conn:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT c.code_hash
+            FROM app_admin_recovery_codes c
+            JOIN app_users u ON u.id=c.user_id
+            WHERE LOWER(u.login)=LOWER(?)
+            ORDER BY c.id
+            """,
+            (normalize_login(login),),
+        )
+        return [str(r[0]) for r in cur.fetchall()]
+
+
+def replace_admin_recovery_codes(login: str, code_hashes: List[str]) -> None:
+    now = _fmt_dt(_now())
+    with get_conn() as conn:
+        cur = conn.cursor()
+        cur.execute("SELECT id FROM app_users WHERE LOWER(login)=LOWER(?) AND is_active=1", (normalize_login(login),))
+        row = cur.fetchone()
+        if not row:
+            raise ValueError("Konto administratora nie jest dostępne.")
+        user_id = int(row[0])
+        cur.execute("DELETE FROM app_admin_recovery_codes WHERE user_id=?", (user_id,))
+        for code_hash in code_hashes:
+            cur.execute(
+                "INSERT INTO app_admin_recovery_codes(user_id, code_hash, created_at) VALUES (?, ?, ?)",
+                (user_id, str(code_hash), now),
+            )
+        conn.commit()
+
+
+def consume_admin_recovery_code(login: str, code_hash: str, new_password_hash: str) -> bool:
+    login_key = normalize_login(login)
+    now = _fmt_dt(_now())
+    with get_conn() as conn:
+        cur = conn.cursor()
+        state = _get_or_create_auth_state(cur, login_key)
+        if _is_locked(state[3]):
+            conn.commit()
+            return False
+
+        cur.execute("SELECT id FROM app_users WHERE LOWER(login)=LOWER(?) AND is_active=1", (login_key,))
+        row = cur.fetchone()
+        if not row:
+            _register_reset_failure(cur, login_key)
+            conn.commit()
+            return False
+        user_id = int(row[0])
+
+        cur.execute(
+            """
+            UPDATE app_admin_recovery_codes
+            SET used_at=?
+            WHERE user_id=? AND code_hash=? AND used_at IS NULL
+            """,
+            (now, user_id, code_hash),
+        )
+        if cur.rowcount < 1:
+            _register_reset_failure(cur, login_key)
+            conn.commit()
+            return False
+
+        cur.execute(
+            "UPDATE app_users SET password_hash=?, reset_code_hash=NULL, reset_code_expires=NULL, updated_at=? WHERE id=?",
+            (new_password_hash, now, user_id),
+        )
+        _clear_reset_failures(cur, login_key)
+        conn.commit()
+        return True
 
 
 def migrate_db():
     """Migracje bazy danych"""
     with get_conn() as conn:
         cur = conn.cursor()
+
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS app_auth_state (
+                login_key TEXT PRIMARY KEY,
+                failed_login_attempts INTEGER NOT NULL DEFAULT 0,
+                login_locked_until TEXT,
+                failed_reset_attempts INTEGER NOT NULL DEFAULT 0,
+                reset_locked_until TEXT,
+                updated_at TEXT NOT NULL
+            )
+            """
+        )
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS app_admin_recovery_codes (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                code_hash TEXT NOT NULL UNIQUE,
+                created_at TEXT NOT NULL,
+                used_at TEXT,
+                FOREIGN KEY(user_id) REFERENCES app_users(id) ON DELETE CASCADE
+            )
+            """
+        )
 
         # Devices
         cur.execute("PRAGMA table_info(devices)")

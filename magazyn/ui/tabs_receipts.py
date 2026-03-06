@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Sequence
 
-from PySide6.QtCore import QDate, Qt, QTimer
+from PySide6.QtCore import QDate, Qt, QTimer, QSettings
 from PySide6.QtGui import QKeySequence, QShortcut, QColor, QGuiApplication
 from PySide6.QtWidgets import (
     QWidget,
@@ -266,6 +266,7 @@ class ReceiptsTab(QWidget):
         self.sort_col = 1
         self.sort_dir = Qt.DescendingOrder
 
+        self._settings = QSettings("Magazyn", "PrzyjeciaUI")
         self._build()
         self._install_shortcuts()
         self._apply_permissions()
@@ -316,6 +317,7 @@ class ReceiptsTab(QWidget):
         split = QSplitter(Qt.Vertical)
         split.setChildrenCollapsible(False)
         root.addWidget(split, stretch=1)
+        self._split = split
 
         self.table = QTableWidget()
         self.table.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
@@ -323,9 +325,11 @@ class ReceiptsTab(QWidget):
         self.table.setSelectionMode(QTableWidget.ExtendedSelection)
         self.table.setSortingEnabled(True)
         self.table.setAlternatingRowColors(True)
+        self.table.horizontalHeader().setSectionsMovable(True)
         split.addWidget(self.table)
 
         form_card = QFrame()
+        self._form_card = form_card
         form_card.setProperty("card", True)
         form_row = QHBoxLayout(form_card)
         form_row.setContentsMargins(10, 8, 10, 8)
@@ -413,7 +417,7 @@ class ReceiptsTab(QWidget):
         split.setStretchFactor(1, 1)
         split.setSizes([900, 260])
 
-        self.btn_toggle_form.toggled.connect(lambda checked: self._toggle_form(split, checked))
+        self.btn_toggle_form.toggled.connect(self._toggle_form)
         self.btn_add.clicked.connect(self.on_add)
         self.btn_del.clicked.connect(self.on_delete)
         self.btn_edit.clicked.connect(self.on_edit)
@@ -430,6 +434,9 @@ class ReceiptsTab(QWidget):
 
         self.table.cellDoubleClicked.connect(lambda r, c: self.on_edit())
         self.table.horizontalHeader().sectionClicked.connect(self.on_header_sort_clicked)
+        self.table.horizontalHeader().sectionResized.connect(lambda *_: self._save_column_widths())
+        self.table.horizontalHeader().sectionMoved.connect(lambda *_: self._save_header_state())
+        self._split.splitterMoved.connect(lambda *_: self._save_splitter_state())
 
         paging_row = QHBoxLayout()
         root.addLayout(paging_row)
@@ -460,6 +467,10 @@ class ReceiptsTab(QWidget):
         root.setStretch(2, 5)
         root.setStretch(3, 0)
 
+        self._restore_splitter_state()
+        form_expanded = str(self._settings.value("form_expanded", "1")) in ("1", "true", "True")
+        self.btn_toggle_form.setChecked(form_expanded)
+        self._toggle_form(form_expanded)
         self.apply_mode()
 
     def _apply_permissions(self) -> None:
@@ -475,13 +486,70 @@ class ReceiptsTab(QWidget):
         for b in (self.btn_add, self.btn_edit, self.btn_del, self.btn_import, self.btn_export, self.btn_copy, self.btn_clear_form):
             b.setEnabled(can_edit)
 
-    def _toggle_form(self, split: QSplitter, expanded: bool) -> None:
+    def _toggle_form(self, expanded: bool) -> None:
+        self._settings.setValue("form_expanded", "1" if expanded else "0")
         if expanded:
             self.btn_toggle_form.setText("Zwiń formularz")
-            split.setSizes([900, 260])
+            self._form_card.show()
+            self._split.setSizes([900, 260])
+            self._save_splitter_state()
         else:
             self.btn_toggle_form.setText("Rozwiń formularz")
-            split.setSizes([1160, 1])
+            self._form_card.hide()
+            self._split.setSizes([1200, 0])
+            self._save_splitter_state()
+
+
+    def _restore_column_widths(self) -> None:
+        raw = self._settings.value("main_table_widths", "")
+        if not raw:
+            return
+        try:
+            widths = [int(x) for x in str(raw).split(",") if x.strip()]
+            if len(widths) != self.table.columnCount():
+                return
+            for i, w in enumerate(widths):
+                self.table.setColumnWidth(i, w)
+        except Exception:
+            pass
+
+    def _save_column_widths(self) -> None:
+        try:
+            widths = [str(self.table.columnWidth(i)) for i in range(self.table.columnCount())]
+            self._settings.setValue("main_table_widths", ",".join(widths))
+        except Exception:
+            pass
+
+
+    def _restore_header_state(self) -> None:
+        raw = self._settings.value("main_table_header_state")
+        if raw is None:
+            return
+        try:
+            self.table.horizontalHeader().restoreState(raw)
+        except Exception:
+            pass
+
+    def _save_header_state(self) -> None:
+        try:
+            self._settings.setValue("main_table_header_state", self.table.horizontalHeader().saveState())
+        except Exception:
+            pass
+
+    def _restore_splitter_state(self) -> None:
+        raw = self._settings.value("main_splitter_state")
+        if raw is None:
+            return
+        try:
+            self._split.restoreState(raw)
+        except Exception:
+            pass
+
+    def _save_splitter_state(self) -> None:
+        try:
+            self._settings.setValue("main_splitter_state", self._split.saveState())
+        except Exception:
+            pass
 
     def _install_shortcuts(self) -> None:
         QShortcut(QKeySequence("Ctrl+C"), self, self.copy_selected_sn)
@@ -856,6 +924,8 @@ class ReceiptsTab(QWidget):
                 rows.append([rr[0], rr[1], rr[2], rr[3], rr[4], rr[5], rr[6], rr[7], rr[8], rr[9], rr[10]])
 
             fill_table(self.table, headers, rows)
+            self._restore_column_widths()
+            self._restore_header_state()
             self.table.horizontalHeader().setSortIndicator(self.sort_col, self.sort_dir)
 
             for i, r in enumerate(pr.rows):

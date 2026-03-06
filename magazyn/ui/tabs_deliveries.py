@@ -78,6 +78,7 @@ class LinkReceiptsDialog(QDialog):
         self.delivery_id = int(delivery_id)
         self.delivery_date = delivery_date
         self.on_done = on_done
+        self._settings = QSettings("Magazyn", "DostawyLinkowanieUI")
 
         self.setWindowTitle(f"Powiąż przyjęcia z dostawą ID={delivery_id}")
         self.resize(980, 560)
@@ -118,6 +119,7 @@ class LinkReceiptsDialog(QDialog):
             "QTableWidget {font-size: 12px; selection-background-color: #2563eb; selection-color: #ffffff;}"
         )
         root.addWidget(self.table, 1)
+        self.table.horizontalHeader().sectionResized.connect(lambda *_: self._save_column_widths())
 
         self.lbl_legend = QLabel(
             "Legenda: szare = już powiązane z tą dostawą, zielone = wolne do powiązania, pomarańczowe = powiązane z inną dostawą"
@@ -162,6 +164,7 @@ class LinkReceiptsDialog(QDialog):
             out.append([r[0], r[1] or "", ITEM_TYPE_TO_LABEL.get(r[2], r[2]), r[3] or "", r[4] or "", r[5] or "", r[6] or "", r[7] or "", label])
 
         fill_table(self.table, headers, out)
+        self._restore_column_widths()
 
         for i, r in enumerate(rows):
             linked = int(r[10] or 0)
@@ -175,6 +178,27 @@ class LinkReceiptsDialog(QDialog):
                 it = self.table.item(i, c)
                 if it:
                     it.setBackground(bg)
+
+
+    def _restore_column_widths(self) -> None:
+        raw = self._settings.value("link_table_widths", "")
+        if not raw:
+            return
+        try:
+            widths = [int(x) for x in str(raw).split(",") if x.strip()]
+            if len(widths) != self.table.columnCount():
+                return
+            for i, w in enumerate(widths):
+                self.table.setColumnWidth(i, w)
+        except Exception:
+            pass
+
+    def _save_column_widths(self) -> None:
+        try:
+            widths = [str(self.table.columnWidth(i)) for i in range(self.table.columnCount())]
+            self._settings.setValue("link_table_widths", ",".join(widths))
+        except Exception:
+            pass
 
     def assign_selected(self) -> None:
         ids = self._selected_ids()

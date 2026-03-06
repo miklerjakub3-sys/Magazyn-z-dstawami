@@ -299,6 +299,11 @@ class ReceiptsTab(QWidget):
         self.btn_search.setProperty("compact", True)
         self.btn_clear = QPushButton("Wyczyść")
         self.btn_clear.setProperty("compact", True)
+        self.btn_toggle_form = QToolButton()
+        self.btn_toggle_form.setCheckable(True)
+        self.btn_toggle_form.setChecked(True)
+        self.btn_toggle_form.setText("Zwiń formularz")
+        self.btn_toggle_form.setProperty("compact", True)
 
         search_row.addWidget(QLabel("Szukaj:"))
         search_row.addWidget(self.search, stretch=2)
@@ -310,6 +315,7 @@ class ReceiptsTab(QWidget):
         search_row.addWidget(self.filter_to)
         search_row.addWidget(self.btn_search)
         search_row.addWidget(self.btn_clear)
+        search_row.addWidget(self.btn_toggle_form)
 
         self.btn_search.clicked.connect(self.on_search)
         self.btn_clear.clicked.connect(self.on_clear)
@@ -394,10 +400,6 @@ class ReceiptsTab(QWidget):
         self.btn_export = QPushButton("Eksport CSV…")
         self.btn_copy = QPushButton("Kopiuj SN")
         self.btn_clear_form = QPushButton("Wyczyść formularz")
-        self.btn_toggle_form = QToolButton()
-        self.btn_toggle_form.setCheckable(True)
-        self.btn_toggle_form.setChecked(True)
-        self.btn_toggle_form.setText("Zwiń formularz")
 
         for b in (self.btn_add, self.btn_edit, self.btn_del, self.btn_import, self.btn_export, self.btn_copy, self.btn_clear_form):
             b.setProperty("compact", True)
@@ -409,7 +411,6 @@ class ReceiptsTab(QWidget):
         btns.addWidget(self.btn_export)
         btns.addWidget(self.btn_copy)
         btns.addWidget(self.btn_clear_form)
-        btns.addWidget(self.btn_toggle_form)
         btns.addStretch(1)
 
         split.addWidget(form_card)
@@ -483,6 +484,7 @@ class ReceiptsTab(QWidget):
         self.filter_to.setEnabled(can_view)
         self.btn_search.setEnabled(can_view)
         self.btn_clear.setEnabled(can_view)
+        self.btn_toggle_form.setEnabled(can_view)
         for b in (self.btn_add, self.btn_edit, self.btn_del, self.btn_import, self.btn_export, self.btn_copy, self.btn_clear_form):
             b.setEnabled(can_edit)
 
@@ -491,13 +493,14 @@ class ReceiptsTab(QWidget):
         if expanded:
             self.btn_toggle_form.setText("Zwiń formularz")
             self._form_card.show()
-            self._split.setSizes([900, 260])
-            self._save_splitter_state()
+            sizes = self._split.sizes()
+            if len(sizes) == 2 and sizes[1] < 80:
+                self._split.setSizes([900, 260])
         else:
             self.btn_toggle_form.setText("Rozwiń formularz")
             self._form_card.hide()
             self._split.setSizes([1200, 0])
-            self._save_splitter_state()
+        self._save_splitter_state()
 
 
     def _restore_column_widths(self) -> None:
@@ -542,6 +545,9 @@ class ReceiptsTab(QWidget):
             return
         try:
             self._split.restoreState(raw)
+            sizes = self._split.sizes()
+            if len(sizes) == 2 and sizes[1] < 20:
+                self._split.setSizes([900, 260])
         except Exception:
             pass
 

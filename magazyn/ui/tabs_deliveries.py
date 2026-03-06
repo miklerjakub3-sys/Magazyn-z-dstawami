@@ -38,17 +38,28 @@ log = get_logger("magazyn.ui.deliveries")
 
 
 class OptionalDateEdit(QDateEdit):
+    MIN_ALLOWED_DATE = QDate(2025, 1, 1)
+    EMPTY_SENTINEL_DATE = QDate(2024, 12, 31)
+
     def __init__(self) -> None:
         super().__init__()
         self.setCalendarPopup(True)
         self.setDisplayFormat("yyyy-MM-dd")
-        self.setMinimumDate(QDate(1900, 1, 1))
         self.setSpecialValueText("— wybierz datę —")
+        self.setDateRange(self.EMPTY_SENTINEL_DATE, QDate(7999, 12, 31))
+        self.setMinimumDate(self.EMPTY_SENTINEL_DATE)
         self.setDate(self.minimumDate())
+        self.dateChanged.connect(self._clamp_if_needed)
+
+    def _clamp_if_needed(self, value: QDate) -> None:
+        if value != self.minimumDate() and value < self.MIN_ALLOWED_DATE:
+            self.blockSignals(True)
+            self.setDate(self.MIN_ALLOWED_DATE)
+            self.blockSignals(False)
 
     def showPopup(self) -> None:
         if self.date() == self.minimumDate():
-            self.setDate(QDate.currentDate())
+            self.setDate(self.MIN_ALLOWED_DATE)
         super().showPopup()
 
 
@@ -67,6 +78,7 @@ class LinkReceiptsDialog(QDialog):
         self.delivery_id = int(delivery_id)
         self.delivery_date = delivery_date
         self.on_done = on_done
+        self._settings = QSettings("Magazyn", "DostawyLinkowanieUI")
 
         self.setWindowTitle(f"Powiąż przyjęcia z dostawą ID={delivery_id}")
         self.resize(980, 560)
@@ -103,10 +115,13 @@ class LinkReceiptsDialog(QDialog):
         self.table.setStyleSheet("font-size: 12px;")
         self.table.setSelectionBehavior(QTableWidget.SelectRows)
         self.table.setSelectionMode(QTableWidget.ExtendedSelection)
+        self.table.horizontalHeader().setSectionsMovable(True)
         self.table.setStyleSheet(
             "QTableWidget {font-size: 12px; selection-background-color: #2563eb; selection-color: #ffffff;}"
         )
         root.addWidget(self.table, 1)
+        self.table.horizontalHeader().sectionResized.connect(lambda *_: self._save_column_widths())
+        self.table.horizontalHeader().sectionMoved.connect(lambda *_: self._save_header_state())
 
         self.lbl_legend = QLabel(
             "Legenda: szare = już powiązane z tą dostawą, zielone = wolne do powiązania, pomarańczowe = powiązane z inną dostawą"
@@ -151,6 +166,8 @@ class LinkReceiptsDialog(QDialog):
             out.append([r[0], r[1] or "", ITEM_TYPE_TO_LABEL.get(r[2], r[2]), r[3] or "", r[4] or "", r[5] or "", r[6] or "", r[7] or "", label])
 
         fill_table(self.table, headers, out)
+        self._restore_column_widths()
+        self._restore_header_state()
 
         for i, r in enumerate(rows):
             linked = int(r[10] or 0)
@@ -164,6 +181,42 @@ class LinkReceiptsDialog(QDialog):
                 it = self.table.item(i, c)
                 if it:
                     it.setBackground(bg)
+
+
+    def _restore_column_widths(self) -> None:
+        raw = self._settings.value("link_table_widths", "")
+        if not raw:
+            return
+        try:
+            widths = [int(x) for x in str(raw).split(",") if x.strip()]
+            if len(widths) != self.table.columnCount():
+                return
+            for i, w in enumerate(widths):
+                self.table.setColumnWidth(i, w)
+        except Exception:
+            pass
+
+    def _save_column_widths(self) -> None:
+        try:
+            widths = [str(self.table.columnWidth(i)) for i in range(self.table.columnCount())]
+            self._settings.setValue("link_table_widths", ",".join(widths))
+        except Exception:
+            pass
+
+    def _restore_header_state(self) -> None:
+        raw = self._settings.value("link_table_header_state")
+        if raw is None:
+            return
+        try:
+            self.table.horizontalHeader().restoreState(raw)
+        except Exception:
+            pass
+
+    def _save_header_state(self) -> None:
+        try:
+            self._settings.setValue("link_table_header_state", self.table.horizontalHeader().saveState())
+        except Exception:
+            pass
 
     def assign_selected(self) -> None:
         ids = self._selected_ids()
@@ -272,10 +325,12 @@ class DeliveriesTab(QWidget):
         main_split = QSplitter(Qt.Vertical)
         main_split.setChildrenCollapsible(False)
         root.addWidget(main_split, 1)
+        self._main_split = main_split
 
         split = QSplitter(Qt.Horizontal)
         split.setChildrenCollapsible(False)
         main_split.addWidget(split)
+        self._top_split = split
 
         left = QWidget()
         left_l = QVBoxLayout(left)
@@ -287,6 +342,7 @@ class DeliveriesTab(QWidget):
         self.table.setSelectionMode(QTableWidget.SingleSelection)
         self.table.setSortingEnabled(True)
         self.table.setAlternatingRowColors(True)
+        self.table.horizontalHeader().setSectionsMovable(True)
         left_l.addWidget(self.table, 1)
         split.addWidget(left)
 
@@ -299,6 +355,7 @@ class DeliveriesTab(QWidget):
         self.tbl_linked.setSelectionBehavior(QTableWidget.SelectRows)
         self.tbl_linked.setSelectionMode(QTableWidget.ExtendedSelection)
         self.tbl_linked.setAlternatingRowColors(True)
+        self.tbl_linked.horizontalHeader().setSectionsMovable(True)
         right_l.addWidget(self.tbl_linked, 1)
 
         right_l.addWidget(QLabel("Załączniki dostawy:"))
@@ -323,6 +380,8 @@ class DeliveriesTab(QWidget):
         main_split.setStretchFactor(0, 6)
         main_split.setStretchFactor(1, 1)
         main_split.setSizes([920, 120])
+        self._restore_splitter_state(self._top_split, "top_split_state")
+        self._restore_splitter_state(self._main_split, "main_split_state")
 
         form = QFormLayout()
         form_row.addLayout(form, stretch=2)
@@ -410,7 +469,11 @@ class DeliveriesTab(QWidget):
         self.table.itemSelectionChanged.connect(self._update_context_actions)
         self.table.horizontalHeader().sectionClicked.connect(self.on_header_sort_clicked)
         self.table.horizontalHeader().sectionResized.connect(lambda *_: self._save_column_widths(self.table, "main_table_widths"))
+        self.table.horizontalHeader().sectionMoved.connect(lambda *_: self._save_header_state(self.table, "main_table_header_state"))
         self.tbl_linked.horizontalHeader().sectionResized.connect(lambda *_: self._save_column_widths(self.tbl_linked, "linked_table_widths"))
+        self.tbl_linked.horizontalHeader().sectionMoved.connect(lambda *_: self._save_header_state(self.tbl_linked, "linked_table_header_state"))
+        self._top_split.splitterMoved.connect(lambda *_: self._save_splitter_state(self._top_split, "top_split_state"))
+        self._main_split.splitterMoved.connect(lambda *_: self._save_splitter_state(self._main_split, "main_split_state"))
         self.list_att.itemDoubleClicked.connect(lambda _: self.on_open_attachment())
         self.list_att.itemSelectionChanged.connect(self._update_context_actions)
         self._update_context_actions()
@@ -524,6 +587,7 @@ class DeliveriesTab(QWidget):
                 rows.append([r[0], r[1], r[2] or "", r[3] or "", r[4] or "", vat, one_line(r[7] or ""), r[8] or "", r[5] or ""])
             fill_table(self.table, headers, rows)
             self._restore_column_widths(self.table, "main_table_widths")
+            self._restore_header_state(self.table, "main_table_header_state")
             self.table.horizontalHeader().setSortIndicator(self.sort_col, self.sort_dir)
 
             for i, r in enumerate(pr.rows):
@@ -578,6 +642,7 @@ class DeliveriesTab(QWidget):
 
             fill_table(self.tbl_linked, ["ID", "Typ", "Nazwa", "SN/Kod", "IMEI1", "IMEI2", "Kod prod.", "Uwagi"], out)
             self._restore_column_widths(self.tbl_linked, "linked_table_widths")
+            self._restore_header_state(self.tbl_linked, "linked_table_header_state")
 
             for row in self.svc.list_delivery_attachments(did):
                 att_id = row[0]
@@ -749,6 +814,36 @@ class DeliveriesTab(QWidget):
         try:
             widths = [str(table.columnWidth(i)) for i in range(table.columnCount())]
             self._settings.setValue(key, ",".join(widths))
+        except Exception:
+            pass
+
+    def _restore_header_state(self, table: QTableWidget, key: str) -> None:
+        raw = self._settings.value(key)
+        if raw is None:
+            return
+        try:
+            table.horizontalHeader().restoreState(raw)
+        except Exception:
+            pass
+
+    def _save_header_state(self, table: QTableWidget, key: str) -> None:
+        try:
+            self._settings.setValue(key, table.horizontalHeader().saveState())
+        except Exception:
+            pass
+
+    def _restore_splitter_state(self, splitter: QSplitter, key: str) -> None:
+        raw = self._settings.value(key)
+        if raw is None:
+            return
+        try:
+            splitter.restoreState(raw)
+        except Exception:
+            pass
+
+    def _save_splitter_state(self, splitter: QSplitter, key: str) -> None:
+        try:
+            self._settings.setValue(key, splitter.saveState())
         except Exception:
             pass
 

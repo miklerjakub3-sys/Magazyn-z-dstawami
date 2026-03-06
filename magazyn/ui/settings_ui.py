@@ -20,8 +20,9 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from ..config import BACKUP_DIR, DB_PATH, BACKUP_ZIP_PASSWORD, MAIN_ADMIN_PASSWORD
+from ..config import BACKUP_DIR, DB_PATH, MAIN_ADMIN_PASSWORD
 from ..services import MagazynService
+from ..backup import get_configured_backup_password
 
 
 class AddUserDialog(QDialog):
@@ -280,9 +281,9 @@ class SettingsPage(QWidget):
         if q.exec() != QMessageBox.Ok:
             return
 
-        entered_password = password.text().strip() or BACKUP_ZIP_PASSWORD
+        entered_password = password.text().strip() or get_configured_backup_password()
         if not entered_password:
-            QMessageBox.warning(self, "Backup", "Backup jest wyłączony: brak MAGAZYN_BACKUP_ZIP_PASSWORD.")
+            QMessageBox.warning(self, "Backup", "Backup jest wyłączony: brak MAGAZYN_BACKUP_ZIP_PASSWORD w środowisku uruchomieniowym.")
             return
         try:
             ok = self.svc.restore_backup(path, password=entered_password)

@@ -428,6 +428,7 @@ class ReceiptsTab(QWidget):
         self.btn_clear_form.clicked.connect(self.clear_form)
 
         self.in_mode.currentTextChanged.connect(self.apply_mode)
+        self.chk_scan.stateChanged.connect(lambda _: self._focus_scan_start())
 
         for w in (self.in_name, self.in_sn, self.in_imei1, self.in_imei2, self.in_prod):
             w.returnPressed.connect(self._scan_next)
@@ -576,38 +577,44 @@ class ReceiptsTab(QWidget):
             self.in_name.setPlaceholderText("")
 
     def _focus_scan_start(self):
-        target = self.in_sn if self.in_mode.currentText() == "Akcesorium" else self.in_name
+        if self.chk_scan.isChecked():
+            target = self.in_sn
+        else:
+            target = self.in_sn if self.in_mode.currentText() == "Akcesorium" else self.in_name
         target.setFocus()
         target.selectAll()
 
     def _scan_next(self) -> None:
-        if self.chk_cont.isChecked():
-            if self.in_mode.currentText() == "Akcesorium":
-                self.on_add()
+        w = self.focusWidget()
+        is_accessory = self.in_mode.currentText() == "Akcesorium"
+
+        # Tryb skanowania: Enter na SN ma być szybkim „dodaj” (zwłaszcza dla akcesoriów).
+        if self.chk_scan.isChecked():
+            if w != self.in_sn:
+                self.in_sn.setFocus()
+                self.in_sn.selectAll()
+                return
+            if not self.in_sn.text().strip():
                 return
 
-            if not self.in_imei1.text().strip():
+            if not is_accessory and not self.in_name.text().strip():
+                # Dla urządzeń w trybie SN podpowiadamy nazwę ze skanu,
+                # żeby Enter mógł od razu dodać pozycję.
+                self.in_name.setText(self.in_sn.text().strip())
+
+            if self.chk_cont.isChecked() or is_accessory:
+                self.on_add()
+            else:
                 self.in_imei1.setFocus()
                 self.in_imei1.selectAll()
-                return
-            if not self.in_imei2.text().strip():
-                self.in_imei2.setFocus()
-                self.in_imei2.selectAll()
-                return
-            if not self.in_prod.text().strip():
-                self.in_prod.setFocus()
-                self.in_prod.selectAll()
-                return
-
-            self.on_add()
             return
 
-        w = self.focusWidget()
+        # Tryb klasyczny (bez „fokus na SN”): sekwencyjnie po wszystkich polach.
         if w == self.in_name:
             self.in_sn.setFocus()
             self.in_sn.selectAll()
         elif w == self.in_sn:
-            if self.in_mode.currentText() == "Akcesorium":
+            if is_accessory:
                 self.on_add()
             else:
                 self.in_imei1.setFocus()

@@ -106,3 +106,15 @@ def test_safe_extract_blocks_zip_traversal(tmp_path):
         zf.setpassword(b"x")
         with pytest.raises(ValueError):
             backup.safe_extract(zf, tmp_path / "out")
+
+
+def test_get_configured_backup_password_reads_runtime_env(monkeypatch):
+    _install_fake_pyzipper()
+    import magazyn.backup as backup
+
+    monkeypatch.setattr(backup.config, "BACKUP_ZIP_PASSWORD", "from-config")
+    monkeypatch.setenv("MAGAZYN_BACKUP_ZIP_PASSWORD", "from-env")
+    assert backup.get_configured_backup_password() == "from-env"
+
+    monkeypatch.delenv("MAGAZYN_BACKUP_ZIP_PASSWORD", raising=False)
+    assert backup.get_configured_backup_password() == "from-config"

@@ -25,12 +25,20 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional, List, Tuple, Any
 
-from .config import BACKUP_DIR, DB_PATH, AUTO_BACKUP_INTERVAL, ATTACH_DIR, DELIVERY_ATTACH_DIR, BACKUP_ZIP_PASSWORD
+from . import config
+from .config import BACKUP_DIR, DB_PATH, AUTO_BACKUP_INTERVAL, ATTACH_DIR, DELIVERY_ATTACH_DIR
 from .log import get_logger
 
 log = get_logger("magazyn.backup")
 MAX_EXTRACTED_FILE_SIZE = 100 * 1024 * 1024
 MAX_EXTRACTED_TOTAL_SIZE = 500 * 1024 * 1024
+
+def get_configured_backup_password() -> str:
+    runtime = (os.getenv("MAGAZYN_BACKUP_ZIP_PASSWORD", "") or "").strip()
+    if runtime:
+        return runtime
+    return (getattr(config, "BACKUP_ZIP_PASSWORD", "") or "").strip()
+
 
 def _get_pyzipper() -> Any:
     try:
@@ -124,7 +132,8 @@ class BackupManager:
                     if p.is_file():
                         z.write(p, arcname=str(Path(arc_root) / p.relative_to(folder)))
 
-            if not BACKUP_ZIP_PASSWORD:
+            backup_password = get_configured_backup_password()
+            if not backup_password:
                 raise RuntimeError("Backup ZIP password is not configured (MAGAZYN_BACKUP_ZIP_PASSWORD).")
             pyzipper = _get_pyzipper()
             with pyzipper.AESZipFile(
@@ -133,7 +142,7 @@ class BackupManager:
                 compression=zipfile.ZIP_DEFLATED,
                 encryption=pyzipper.WZ_AES,
             ) as z:
-                z.setpassword(BACKUP_ZIP_PASSWORD.encode("utf-8"))
+                z.setpassword(backup_password.encode("utf-8"))
                 z.write(tmp_gz, arcname="db/magazyn.db.gz")
                 add_dir(z, Path(ATTACH_DIR), "attachments")
                 add_dir(z, Path(DELIVERY_ATTACH_DIR), "delivery_attachments")
@@ -210,9 +219,10 @@ class BackupManager:
             tmp_dir = self.backup_dir / f"_restore_tmp_{int(time.time())}"
             tmp_dir.mkdir(parents=True, exist_ok=True)
 
-            pwd = (password or BACKUP_ZIP_PASSWORD).encode("utf-8")
-            if not BACKUP_ZIP_PASSWORD:
+            effective_password = (password or get_configured_backup_password()).strip()
+            if not effective_password:
                 raise RuntimeError("Backup ZIP password is not configured (MAGAZYN_BACKUP_ZIP_PASSWORD).")
+            pwd = effective_password.encode("utf-8")
             pyzipper = _get_pyzipper()
             with pyzipper.AESZipFile(bp, "r") as z:
                 z.setpassword(pwd)

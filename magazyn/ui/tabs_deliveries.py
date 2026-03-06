@@ -23,6 +23,7 @@ from PySide6.QtWidgets import (
     QPushButton,
     QSplitter,
     QTableWidget,
+    QToolButton,
     QVBoxLayout,
     QWidget,
 )
@@ -283,8 +284,12 @@ class DeliveriesTab(QWidget):
         self.btn_search = QPushButton("Szukaj")
         self.btn_clear = QPushButton("Wyczyść")
         self.btn_export = QPushButton("Eksport CSV…")
+        self.btn_toggle_form = QToolButton()
+        self.btn_toggle_form.setCheckable(True)
+        self.btn_toggle_form.setChecked(True)
+        self.btn_toggle_form.setText("Zwiń formularz")
 
-        for w in (self.f_from, self.f_to, self.f_type, self.btn_search, self.btn_clear, self.btn_export):
+        for w in (self.f_from, self.f_to, self.f_type, self.btn_search, self.btn_clear, self.btn_export, self.btn_toggle_form):
             w.setProperty("compact", True)
 
         filt.addWidget(QLabel("Od:"))
@@ -296,10 +301,12 @@ class DeliveriesTab(QWidget):
         filt.addWidget(self.btn_search)
         filt.addWidget(self.btn_clear)
         filt.addWidget(self.btn_export)
+        filt.addWidget(self.btn_toggle_form)
 
         self.btn_search.clicked.connect(self.on_search)
         self.btn_clear.clicked.connect(self.on_clear)
         self.btn_export.clicked.connect(self.on_export_csv)
+        self.btn_toggle_form.toggled.connect(self._toggle_form)
 
         paging = QHBoxLayout()
         root.addLayout(paging)
@@ -374,6 +381,7 @@ class DeliveriesTab(QWidget):
         right.setMinimumWidth(260)
 
         form_card = QFrame()
+        self._form_card = form_card
         form_card.setProperty("card", True)
         form_row = QHBoxLayout(form_card)
         form_row.setContentsMargins(12, 10, 12, 10)
@@ -383,6 +391,9 @@ class DeliveriesTab(QWidget):
         main_split.setSizes([920, 120])
         self._restore_splitter_state(self._top_split, "top_split_state")
         self._restore_splitter_state(self._main_split, "main_split_state")
+        form_expanded = str(self._settings.value("form_expanded", "1")) in ("1", "true", "True")
+        self.btn_toggle_form.setChecked(form_expanded)
+        self._toggle_form(form_expanded)
 
         form = QFormLayout()
         form_row.addLayout(form, stretch=2)
@@ -448,7 +459,7 @@ class DeliveriesTab(QWidget):
         can_view = bool(self.svc.has_permission("deliveries.view"))
         can_edit = bool(self.svc.has_permission("deliveries.edit"))
 
-        for w in (self.f_from, self.f_to, self.f_type, self.btn_search, self.btn_clear):
+        for w in (self.f_from, self.f_to, self.f_type, self.btn_search, self.btn_clear, self.btn_toggle_form):
             w.setEnabled(can_view)
         self.table.setEnabled(can_view)
         self.tbl_linked.setEnabled(can_view)
@@ -481,6 +492,21 @@ class DeliveriesTab(QWidget):
 
     def _install_shortcuts(self) -> None:
         QShortcut(QKeySequence("Delete"), self, self.on_delete)
+
+
+    def _toggle_form(self, expanded: bool) -> None:
+        self._settings.setValue("form_expanded", "1" if expanded else "0")
+        if expanded:
+            self.btn_toggle_form.setText("Zwiń formularz")
+            self._form_card.show()
+            sizes = self._main_split.sizes()
+            if len(sizes) == 2 and sizes[1] < 80:
+                self._main_split.setSizes([920, 120])
+        else:
+            self.btn_toggle_form.setText("Rozwiń formularz")
+            self._form_card.hide()
+            self._main_split.setSizes([1000, 0])
+        self._save_splitter_state(self._main_split, "main_split_state")
 
     def _update_context_actions(self) -> None:
         has_delivery = self._selected_delivery_id() is not None
@@ -850,6 +876,10 @@ class DeliveriesTab(QWidget):
             return
         try:
             splitter.restoreState(raw)
+            if key == "main_split_state":
+                sizes = splitter.sizes()
+                if len(sizes) == 2 and sizes[1] < 20:
+                    splitter.setSizes([920, 120])
         except Exception:
             pass
 

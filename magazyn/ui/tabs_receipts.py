@@ -325,6 +325,7 @@ class ReceiptsTab(QWidget):
         self.table.setSelectionMode(QTableWidget.ExtendedSelection)
         self.table.setSortingEnabled(True)
         self.table.setAlternatingRowColors(True)
+        self.table.horizontalHeader().setSectionsMovable(True)
         split.addWidget(self.table)
 
         form_card = QFrame()
@@ -434,6 +435,8 @@ class ReceiptsTab(QWidget):
         self.table.cellDoubleClicked.connect(lambda r, c: self.on_edit())
         self.table.horizontalHeader().sectionClicked.connect(self.on_header_sort_clicked)
         self.table.horizontalHeader().sectionResized.connect(lambda *_: self._save_column_widths())
+        self.table.horizontalHeader().sectionMoved.connect(lambda *_: self._save_header_state())
+        self._split.splitterMoved.connect(lambda *_: self._save_splitter_state())
 
         paging_row = QHBoxLayout()
         root.addLayout(paging_row)
@@ -464,6 +467,7 @@ class ReceiptsTab(QWidget):
         root.setStretch(2, 5)
         root.setStretch(3, 0)
 
+        self._restore_splitter_state()
         form_expanded = str(self._settings.value("form_expanded", "1")) in ("1", "true", "True")
         self.btn_toggle_form.setChecked(form_expanded)
         self._toggle_form(form_expanded)
@@ -488,10 +492,12 @@ class ReceiptsTab(QWidget):
             self.btn_toggle_form.setText("Zwiń formularz")
             self._form_card.show()
             self._split.setSizes([900, 260])
+            self._save_splitter_state()
         else:
             self.btn_toggle_form.setText("Rozwiń formularz")
             self._form_card.hide()
             self._split.setSizes([1200, 0])
+            self._save_splitter_state()
 
 
     def _restore_column_widths(self) -> None:
@@ -511,6 +517,37 @@ class ReceiptsTab(QWidget):
         try:
             widths = [str(self.table.columnWidth(i)) for i in range(self.table.columnCount())]
             self._settings.setValue("main_table_widths", ",".join(widths))
+        except Exception:
+            pass
+
+
+    def _restore_header_state(self) -> None:
+        raw = self._settings.value("main_table_header_state")
+        if raw is None:
+            return
+        try:
+            self.table.horizontalHeader().restoreState(raw)
+        except Exception:
+            pass
+
+    def _save_header_state(self) -> None:
+        try:
+            self._settings.setValue("main_table_header_state", self.table.horizontalHeader().saveState())
+        except Exception:
+            pass
+
+    def _restore_splitter_state(self) -> None:
+        raw = self._settings.value("main_splitter_state")
+        if raw is None:
+            return
+        try:
+            self._split.restoreState(raw)
+        except Exception:
+            pass
+
+    def _save_splitter_state(self) -> None:
+        try:
+            self._settings.setValue("main_splitter_state", self._split.saveState())
         except Exception:
             pass
 
@@ -888,6 +925,7 @@ class ReceiptsTab(QWidget):
 
             fill_table(self.table, headers, rows)
             self._restore_column_widths()
+            self._restore_header_state()
             self.table.horizontalHeader().setSortIndicator(self.sort_col, self.sort_dir)
 
             for i, r in enumerate(pr.rows):

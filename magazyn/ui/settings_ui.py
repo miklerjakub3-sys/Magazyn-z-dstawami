@@ -257,7 +257,7 @@ class SettingsPage(QWidget):
             QMessageBox.warning(self, "Backup", "Brak uprawnienia: backup.manage")
             return
         if path:
-            QMessageBox.information(self, "Backup", f"Utworzono backup (hasło ZIP aktywne):\n{path}")
+            QMessageBox.information(self, "Backup", f"Utworzono backup:\n{path}")
             self.refresh_backups()
         else:
             QMessageBox.warning(self, "Backup", "Nie udało się utworzyć backupu.")
@@ -275,16 +275,13 @@ class SettingsPage(QWidget):
 
         q = QMessageBox(self)
         q.setWindowTitle("Potwierdź przywracanie")
-        q.setText("Podaj hasło ZIP backupu, aby przywrócić:")
+        q.setText("Podaj hasło ZIP backupu (jeśli backup był szyfrowany):")
         q.layout().addWidget(password, 1, 1)
         q.setStandardButtons(QMessageBox.Ok | QMessageBox.Cancel)
         if q.exec() != QMessageBox.Ok:
             return
 
         entered_password = password.text().strip() or get_configured_backup_password()
-        if not entered_password:
-            QMessageBox.warning(self, "Backup", "Backup jest wyłączony: brak MAGAZYN_BACKUP_ZIP_PASSWORD w środowisku uruchomieniowym.")
-            return
         try:
             ok = self.svc.restore_backup(path, password=entered_password)
         except PermissionError:

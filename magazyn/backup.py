@@ -132,17 +132,11 @@ class BackupManager:
                     if p.is_file():
                         z.write(p, arcname=str(Path(arc_root) / p.relative_to(folder)))
 
-            backup_password = get_configured_backup_password()
-            if not backup_password:
-                raise RuntimeError("Backup ZIP password is not configured (MAGAZYN_BACKUP_ZIP_PASSWORD).")
-            pyzipper = _get_pyzipper()
-            with pyzipper.AESZipFile(
+            with zipfile.ZipFile(
                 backup_path,
                 "w",
                 compression=zipfile.ZIP_DEFLATED,
-                encryption=pyzipper.WZ_AES,
             ) as z:
-                z.setpassword(backup_password.encode("utf-8"))
                 z.write(tmp_gz, arcname="db/magazyn.db.gz")
                 add_dir(z, Path(ATTACH_DIR), "attachments")
                 add_dir(z, Path(DELIVERY_ATTACH_DIR), "delivery_attachments")
@@ -220,13 +214,19 @@ class BackupManager:
             tmp_dir.mkdir(parents=True, exist_ok=True)
 
             effective_password = (password or get_configured_backup_password()).strip()
-            if not effective_password:
-                raise RuntimeError("Backup ZIP password is not configured (MAGAZYN_BACKUP_ZIP_PASSWORD).")
-            pwd = effective_password.encode("utf-8")
-            pyzipper = _get_pyzipper()
-            with pyzipper.AESZipFile(bp, "r") as z:
-                z.setpassword(pwd)
-                safe_extract(z, tmp_dir)
+            extracted = False
+            if effective_password:
+                try:
+                    pyzipper = _get_pyzipper()
+                    with pyzipper.AESZipFile(bp, "r") as z:
+                        z.setpassword(effective_password.encode("utf-8"))
+                        safe_extract(z, tmp_dir)
+                    extracted = True
+                except Exception:
+                    extracted = False
+            if not extracted:
+                with zipfile.ZipFile(bp, "r") as z:
+                    safe_extract(z, tmp_dir)
 
             # restore db
             gz = tmp_dir / "db" / "magazyn.db.gz"

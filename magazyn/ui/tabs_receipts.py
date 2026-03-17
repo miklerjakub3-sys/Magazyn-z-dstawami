@@ -380,9 +380,10 @@ class ReceiptsTab(QWidget):
         opts.setSpacing(4)
         form_row.addLayout(opts, stretch=1)
         self.chk_scan = QCheckBox("Tryb skanowania (fokus na SN)")
+        self.chk_single_imei = QCheckBox("Urządzenie z 1 IMEI (pomiń IMEI2)")
         self.chk_cont = QCheckBox("Ciągłe (Enter=Dodaj)")
-        self.chk_scan.setChecked(True)
         opts.addWidget(self.chk_scan)
+        opts.addWidget(self.chk_single_imei)
         opts.addWidget(self.chk_cont)
         opts.addStretch(1)
 
@@ -429,6 +430,7 @@ class ReceiptsTab(QWidget):
 
         self.in_mode.currentTextChanged.connect(self.apply_mode)
         self.chk_scan.stateChanged.connect(lambda _: self._focus_scan_start())
+        self.chk_single_imei.stateChanged.connect(lambda _: self._apply_scan_variant())
 
         for w in (self.in_name, self.in_sn, self.in_imei1, self.in_imei2, self.in_prod):
             w.returnPressed.connect(self._scan_next)
@@ -474,6 +476,7 @@ class ReceiptsTab(QWidget):
         self.btn_toggle_form.setChecked(form_expanded)
         self._toggle_form(form_expanded)
         self.apply_mode()
+        self._apply_scan_variant()
 
     def _apply_permissions(self) -> None:
         can_view = bool(self.svc.has_permission("receipts.view"))
@@ -575,6 +578,14 @@ class ReceiptsTab(QWidget):
                 self.in_name.setText("Akcesorium")
         else:
             self.in_name.setPlaceholderText("")
+        self._apply_scan_variant()
+
+    def _apply_scan_variant(self) -> None:
+        is_accessory = self.in_mode.currentText() == "Akcesorium"
+        single_imei = self.chk_single_imei.isChecked() and not is_accessory
+        self.in_imei2.setEnabled(not is_accessory and not single_imei)
+        if single_imei:
+            self.in_imei2.clear()
 
     def _focus_scan_start(self):
         if self.chk_scan.isChecked():
@@ -620,8 +631,12 @@ class ReceiptsTab(QWidget):
                 self.in_imei1.setFocus()
                 self.in_imei1.selectAll()
         elif w == self.in_imei1:
-            self.in_imei2.setFocus()
-            self.in_imei2.selectAll()
+            if self.chk_single_imei.isChecked() and not is_accessory:
+                self.in_prod.setFocus()
+                self.in_prod.selectAll()
+            else:
+                self.in_imei2.setFocus()
+                self.in_imei2.selectAll()
         elif w == self.in_imei2:
             self.in_prod.setFocus()
             self.in_prod.selectAll()

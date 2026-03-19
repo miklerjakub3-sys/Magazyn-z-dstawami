@@ -95,3 +95,84 @@ def test_basic_crud_deliveries_and_devices(monkeypatch):
         assert db.get_delivery(delivery_id) is None
     finally:
         td.cleanup()
+
+
+def test_migration_keeps_delivery_attachment_fk_on_deliveries(monkeypatch):
+    td, db = _setup_tmp(monkeypatch)
+    try:
+        with db.get_conn() as conn:
+            conn.execute("DROP TABLE delivery_attachments")
+            conn.execute("DROP TABLE devices")
+            conn.execute("DROP TABLE deliveries")
+            conn.execute(
+                """
+                CREATE TABLE deliveries (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    delivery_date TEXT NOT NULL,
+                    sender_name TEXT,
+                    courier_name TEXT,
+                    delivery_type TEXT NOT NULL,
+                    tracking_number TEXT,
+                    invoice_vat INTEGER NOT NULL DEFAULT 0,
+                    notes TEXT,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT
+                )
+                """
+            )
+            conn.execute(
+                """
+                CREATE TABLE devices (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    received_date TEXT NOT NULL,
+                    item_type TEXT NOT NULL DEFAULT 'device',
+                    device_name TEXT,
+                    serial_number TEXT,
+                    imei1 TEXT,
+                    imei2 TEXT,
+                    production_code TEXT,
+                    notes TEXT,
+                    delivery_id INTEGER,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT,
+                    FOREIGN KEY(delivery_id) REFERENCES deliveries(id) ON DELETE SET NULL
+                )
+                """
+            )
+            conn.execute(
+                """
+                CREATE TABLE delivery_attachments (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    delivery_id INTEGER NOT NULL,
+                    file_path TEXT NOT NULL,
+                    file_name TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    FOREIGN KEY(delivery_id) REFERENCES deliveries(id) ON DELETE CASCADE
+                )
+                """
+            )
+            conn.commit()
+
+        db.migrate_db()
+
+        with db.get_conn() as conn:
+            fk_rows = conn.execute("PRAGMA foreign_key_list(delivery_attachments)").fetchall()
+            assert {row[2] for row in fk_rows} == {"deliveries"}
+
+        delivery_id = db.add_delivery(
+            delivery_date="2026-03-19",
+            sender_name="Nadawca",
+            courier_name="DHL",
+            delivery_type="MAGAZYN",
+            tracking_number="",
+            invoice_vat=0,
+            notes="",
+        )
+        attachment_src = Path(td.name) / "foto.jpg"
+        attachment_src.write_bytes(b"fake image bytes")
+        db.add_delivery_attachment(delivery_id, str(attachment_src))
+
+        attachments = db.list_delivery_attachments(delivery_id)
+        assert len(attachments) == 1
+    finally:
+        td.cleanup()

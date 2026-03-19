@@ -817,6 +817,7 @@ def migrate_db():
         _normalize_existing_logins(cur)
         _enforce_case_insensitive_login_unique(cur)
         _rebuild_deliveries_with_constraints(cur)
+        _rebuild_delivery_attachments_with_constraints(cur)
         _rebuild_devices_with_constraints(cur)
         conn.commit()
 
@@ -898,6 +899,41 @@ def _rebuild_deliveries_with_constraints(cur: sqlite3.Cursor) -> None:
         """
     )
     cur.execute("DROP TABLE deliveries_old")
+
+
+def _rebuild_delivery_attachments_with_constraints(cur: sqlite3.Cursor) -> None:
+    cur.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='delivery_attachments'")
+    row = cur.fetchone()
+    sql = (row[0] or "") if row else ""
+    fk_rows = cur.execute("PRAGMA foreign_key_list(delivery_attachments)").fetchall()
+    target_tables = {str(fk[2]) for fk in fk_rows}
+    required_fragments = [
+        "FOREIGN KEY(delivery_id) REFERENCES deliveries(id) ON DELETE CASCADE",
+    ]
+    if all(fragment in sql for fragment in required_fragments) and target_tables in ({"deliveries"}, set()):
+        return
+
+    cur.execute("ALTER TABLE delivery_attachments RENAME TO delivery_attachments_old")
+    cur.execute(
+        """
+        CREATE TABLE delivery_attachments (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            delivery_id INTEGER NOT NULL,
+            file_path TEXT NOT NULL,
+            file_name TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            FOREIGN KEY(delivery_id) REFERENCES deliveries(id) ON DELETE CASCADE
+        )
+        """
+    )
+    cur.execute(
+        """
+        INSERT INTO delivery_attachments(id, delivery_id, file_path, file_name, created_at)
+        SELECT id, delivery_id, file_path, file_name, created_at
+        FROM delivery_attachments_old
+        """
+    )
+    cur.execute("DROP TABLE delivery_attachments_old")
 
 
 def _rebuild_devices_with_constraints(cur: sqlite3.Cursor) -> None:

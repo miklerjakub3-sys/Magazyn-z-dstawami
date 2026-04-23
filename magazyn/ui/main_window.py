@@ -22,6 +22,7 @@ from ..log import get_logger
 from ..services import MagazynService
 from .dashboard import DashboardPage
 from .deliveries_ui import DeliveriesTab
+from .issues_ui import IssuesTab
 from .receipts_ui import ReceiptsTab
 from .report_ui import ReportsTab
 from .settings_ui import SettingsPage
@@ -78,10 +79,11 @@ class MainWindow(QMainWindow):
             "dashboard": DashboardPage(self.svc),
             "receipts": ReceiptsTab(self.svc),
             "deliveries": DeliveriesTab(self.svc),
+            "issues": IssuesTab(self.svc),
             "reports": ReportsTab(self.svc),
             "settings": SettingsPage(self.svc),
         }
-        for key in ["dashboard", "receipts", "deliveries", "reports", "settings"]:
+        for key in ["dashboard", "receipts", "deliveries", "issues", "reports", "settings"]:
             self.stack.addWidget(self.pages[key])
 
         content_l.addWidget(self.stack, 1)
@@ -100,6 +102,7 @@ class MainWindow(QMainWindow):
             "dashboard": "Pulpit",
             "receipts": "Przyjęcia",
             "deliveries": "Dostawy",
+            "issues": "Wydania (WZ)",
             "reports": "Raporty",
             "settings": "Ustawienia",
         }

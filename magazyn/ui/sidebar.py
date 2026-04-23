@@ -35,6 +35,7 @@ class SidebarNav(QFrame):
             ("dashboard", "🏠  Pulpit"),
             ("receipts", "📥  Przyjęcia"),
             ("deliveries", "🚚  Dostawy"),
+            ("issues", "🧾  Wydania (WZ)"),
             ("reports", "📄  Raporty"),
             ("settings", "⚙️  Ustawienia"),
         ]:

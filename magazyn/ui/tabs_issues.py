@@ -7,6 +7,8 @@ from datetime import date
 from PySide6.QtWidgets import (
     QFileDialog,
     QFormLayout,
+    QFrame,
+    QGroupBox,
     QHeaderView,
     QHBoxLayout,
     QLabel,
@@ -32,41 +34,58 @@ class IssuesTab(QWidget):
         super().__init__()
         self.svc = svc
         self._build()
+        self.refresh_history()
 
     def _build(self) -> None:
         root = QVBoxLayout(self)
         root.setContentsMargins(12, 12, 12, 12)
         root.setSpacing(8)
 
-        form = QFormLayout()
-        root.addLayout(form)
+        self.card_form = QFrame()
+        self.card_form.setProperty("card", True)
+        card_l = QVBoxLayout(self.card_form)
+        card_l.setContentsMargins(12, 12, 12, 12)
+        root.addWidget(self.card_form)
 
+        top = QHBoxLayout()
+        card_l.addLayout(top)
+
+        seller_box = QGroupBox("Wystawca (stałe dane)")
+        seller_l = QVBoxLayout(seller_box)
+        seller_l.addWidget(QLabel(
+            "AXED serwis s.c.\n"
+            "ul. Wagrowska 2\n"
+            "61-369 Poznań\n"
+            "email: biuro@axedserwis.com.pl\n"
+            "tel: 600 373 202\n\n"
+            "NIP: 7822837756\n"
+            "Regon: 381387430"
+        ))
+        top.addWidget(seller_box, 1)
+
+        buyer_box = QGroupBox("Odbiorca (firma kupująca)")
+        buyer_form = QFormLayout(buyer_box)
         self.in_company = QLineEdit()
         self.in_address = QLineEdit()
-        self.in_place = QLineEdit()
-        self.in_place.setText("Bielsko-Biała")
-
+        self.in_place = QLineEdit("Poznań")
         self.in_company.setPlaceholderText("Np. Firma XYZ Sp. z o.o.")
-        self.in_address.setPlaceholderText("Np. ul. Przykładowa 10, 43-300 Bielsko-Biała")
-        self.in_place.setPlaceholderText("Miejsce wystawienia")
-
-        form.addRow("Nazwa firmy", self.in_company)
-        form.addRow("Ulica / adres", self.in_address)
-        form.addRow("Miejsce", self.in_place)
+        self.in_address.setPlaceholderText("Np. ul. Jasnogórska 15/14, 42-200 Częstochowa")
+        buyer_form.addRow("Nazwa firmy", self.in_company)
+        buyer_form.addRow("Ulica / adres", self.in_address)
+        buyer_form.addRow("Miejsce wystawienia", self.in_place)
+        top.addWidget(buyer_box, 2)
 
         row = QHBoxLayout()
-        root.addLayout(row)
-
+        card_l.addLayout(row)
         self.in_item_name = QLineEdit()
         self.in_item_qty = QSpinBox()
         self.in_item_qty.setRange(1, 1_000_000)
         self.in_item_qty.setValue(1)
         self.btn_add_item = QPushButton("Dodaj pozycję")
         self.btn_remove_item = QPushButton("Usuń zaznaczoną")
-
-        row.addWidget(QLabel("Nazwa pozycji:"))
+        row.addWidget(QLabel("Nazwa towaru:"))
         row.addWidget(self.in_item_name, 1)
-        row.addWidget(QLabel("Ilość sztuk:"))
+        row.addWidget(QLabel("Ilość (szt.):"))
         row.addWidget(self.in_item_qty)
         row.addWidget(self.btn_add_item)
         row.addWidget(self.btn_remove_item)
@@ -75,15 +94,34 @@ class IssuesTab(QWidget):
         self.table.setHorizontalHeaderLabels(["Nazwa towaru", "Ilość (szt.)"])
         self.table.horizontalHeader().setStretchLastSection(False)
         self.table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
-        self.table.setColumnWidth(1, 130)
-        root.addWidget(self.table, 1)
+        self.table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeToContents)
+        self.table.setAlternatingRowColors(True)
+        card_l.addWidget(self.table, 1)
 
         self.btn_generate = QPushButton("Generuj PDF WZ")
         self.btn_generate.setEnabled(PDF_AVAILABLE)
-        root.addWidget(self.btn_generate)
+        card_l.addWidget(self.btn_generate)
 
         if not PDF_AVAILABLE:
-            root.addWidget(QLabel("Brak reportlab – generowanie WZ PDF wyłączone. Zainstaluj: pip install reportlab"))
+            card_l.addWidget(QLabel("Brak reportlab – generowanie WZ PDF wyłączone. Zainstaluj: pip install reportlab"))
+
+        hist_card = QFrame()
+        hist_card.setProperty("card", True)
+        hist_l = QVBoxLayout(hist_card)
+        hist_l.setContentsMargins(12, 12, 12, 12)
+        hist_l.addWidget(QLabel("Historia wydań"))
+        self.hist_table = QTableWidget(0, 6)
+        self.hist_table.setHorizontalHeaderLabels(["ID", "Data", "Miejsce", "Odbiorca", "Pozycji", "PDF"])
+        self.hist_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
+        self.hist_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeToContents)
+        self.hist_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeToContents)
+        self.hist_table.horizontalHeader().setSectionResizeMode(3, QHeaderView.Stretch)
+        self.hist_table.horizontalHeader().setSectionResizeMode(4, QHeaderView.ResizeToContents)
+        self.hist_table.horizontalHeader().setSectionResizeMode(5, QHeaderView.Stretch)
+        self.hist_table.setEditTriggers(QTableWidget.NoEditTriggers)
+        self.hist_table.setSelectionBehavior(QTableWidget.SelectRows)
+        hist_l.addWidget(self.hist_table)
+        root.addWidget(hist_card, 1)
 
         self.btn_add_item.clicked.connect(self.on_add_item)
         self.btn_remove_item.clicked.connect(self.on_remove_item)
@@ -124,6 +162,24 @@ class IssuesTab(QWidget):
             items.append({"name": name, "qty": qty})
         return items
 
+    def refresh_history(self) -> None:
+        try:
+            rows = self.svc.list_issue_history(limit=300)
+        except Exception:
+            log.exception("issue history load failed")
+            rows = []
+
+        self.hist_table.setRowCount(0)
+        for r in rows:
+            row = self.hist_table.rowCount()
+            self.hist_table.insertRow(row)
+            self.hist_table.setItem(row, 0, QTableWidgetItem(str(r[0])))
+            self.hist_table.setItem(row, 1, QTableWidgetItem(r[1] or ""))
+            self.hist_table.setItem(row, 2, QTableWidgetItem(r[2] or ""))
+            self.hist_table.setItem(row, 3, QTableWidgetItem(r[3] or ""))
+            self.hist_table.setItem(row, 4, QTableWidgetItem(str(len(r[5] or []))))
+            self.hist_table.setItem(row, 5, QTableWidgetItem(r[6] or ""))
+
     def on_generate_pdf(self) -> None:
         try:
             company = self.in_company.text().strip()
@@ -132,10 +188,10 @@ class IssuesTab(QWidget):
             items = self._collect_items()
 
             if not company:
-                QMessageBox.information(self, "Info", "Podaj nazwę firmy.")
+                QMessageBox.information(self, "Info", "Podaj nazwę firmy odbiorcy.")
                 return
             if not address:
-                QMessageBox.information(self, "Info", "Podaj adres firmy.")
+                QMessageBox.information(self, "Info", "Podaj adres firmy odbiorcy.")
                 return
             if not place:
                 QMessageBox.information(self, "Info", "Podaj miejsce wystawienia.")
@@ -144,13 +200,25 @@ class IssuesTab(QWidget):
                 QMessageBox.information(self, "Info", "Dodaj minimum jedną pozycję.")
                 return
 
-            default_name = f"WZ_{company}_{date.today().isoformat()}.pdf".replace(" ", "_")
+            if QMessageBox.question(
+                self,
+                "Potwierdzenie",
+                "Czy na pewno chcesz wygenerować PDF WZ i zapisać dokument w historii wydań?",
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.Yes,
+            ) != QMessageBox.Yes:
+                return
+
+            issue_date = date.today().isoformat()
+            default_name = f"WZ_{company}_{issue_date}.pdf".replace(" ", "_")
             path, _ = QFileDialog.getSaveFileName(self, "Zapisz dokument WZ", default_name, "PDF (*.pdf)")
             if not path:
                 return
 
-            export_wz_to_pdf(path, company, address, place, items)
-            QMessageBox.information(self, "OK", f"WZ zapisano: {path}")
+            export_wz_to_pdf(path, company, address, place, items, issue_date=issue_date)
+            self.svc.add_issue_history(issue_date, place, company, address, items, pdf_path=path)
+            self.refresh_history()
+            QMessageBox.information(self, "OK", f"WZ zapisano: {path}\nDokument dodano do historii.")
         except Exception as e:
             log.exception("wz export failed")
             QMessageBox.critical(self, "Błąd", str(e))

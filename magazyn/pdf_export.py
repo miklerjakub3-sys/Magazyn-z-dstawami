@@ -246,7 +246,7 @@ def export_deliveries_to_pdf(filename, rows, date_from, date_to, type_label):
     doc.build(story, onFirstPage=_on_page, onLaterPages=_on_page)
 
 
-def export_wz_to_pdf(filename, company_name, company_address, issue_place, items):
+def export_wz_to_pdf(filename, buyer_name, buyer_address, issue_place, items, issue_date: str = ""):
     """Generuje dokument WZ (bez cen) do PDF."""
     if not PDF_AVAILABLE:
         raise Exception("Brak biblioteki reportlab")
@@ -264,7 +264,19 @@ def export_wz_to_pdf(filename, company_name, company_address, issue_place, items
     )
 
     now = datetime.now()
+    issue_date = (issue_date or now.strftime("%Y-%m-%d")).strip()
+    doc_no = f"WZ/{now.strftime('%Y%m%d')}/{now.strftime('%H%M%S')}"
     logo_path = _find_company_logo_path()
+    seller_lines = [
+        "AXED serwis s.c.",
+        "ul. Wagrowska 2",
+        "61-369 Poznań",
+        "email: biuro@axedserwis.com.pl",
+        "tel: 600 373 202",
+        "",
+        "NIP: 7822837756",
+        "REGON: 381387430",
+    ]
 
     story = []
     header_data = [
@@ -291,30 +303,32 @@ def export_wz_to_pdf(filename, company_name, company_address, issue_place, items
     )
     story.append(header)
     story.append(Spacer(1, 6))
-    story.append(Paragraph(f"Data wystawienia: {now.strftime('%Y-%m-%d')}", styles["Info"]))
+    story.append(Paragraph(f"Data wystawienia: {issue_date}", styles["Info"]))
     story.append(Paragraph(f"Miejsce wystawienia: {issue_place}", styles["Info"]))
+    story.append(Paragraph(f"Numer dokumentu: {doc_no}", styles["Info"]))
     story.append(Spacer(1, 10))
 
-    company_table = Table(
-        [
-            [Paragraph("<b>Odbiorca:</b>", styles["Normal"])],
-            [Paragraph(company_name, styles["Normal"])],
-            [Paragraph(company_address.replace("\n", "<br/>"), styles["Normal"])],
-        ],
-        colWidths=[doc.width],
+    party_table = Table(
+        [[
+            Paragraph("<b>Wystawca (sprzedawca):</b><br/>" + "<br/>".join(seller_lines), styles["Normal"]),
+            Paragraph("<b>Odbiorca:</b><br/>" + buyer_name + "<br/>" + buyer_address.replace("\n", "<br/>"), styles["Normal"]),
+        ]],
+        colWidths=[doc.width / 2, doc.width / 2],
     )
-    company_table.setStyle(
+    party_table.setStyle(
         TableStyle(
             [
                 ("BOX", (0, 0), (-1, -1), 0.5, colors.HexColor("#9ca3af")),
+                ("INNERGRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#9ca3af")),
                 ("LEFTPADDING", (0, 0), (-1, -1), 8),
                 ("RIGHTPADDING", (0, 0), (-1, -1), 8),
                 ("TOPPADDING", (0, 0), (-1, -1), 6),
                 ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
             ]
         )
     )
-    story.append(company_table)
+    story.append(party_table)
     story.append(Spacer(1, 12))
 
     rows = [["Lp.", "Nazwa towaru", "Ilość (szt.)"]]

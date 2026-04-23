@@ -7,6 +7,7 @@ from datetime import date
 from PySide6.QtWidgets import (
     QFileDialog,
     QFormLayout,
+    QHeaderView,
     QHBoxLayout,
     QLabel,
     QLineEdit,
@@ -73,7 +74,7 @@ class IssuesTab(QWidget):
         self.table = QTableWidget(0, 2)
         self.table.setHorizontalHeaderLabels(["Nazwa towaru", "Ilość (szt.)"])
         self.table.horizontalHeader().setStretchLastSection(False)
-        self.table.horizontalHeader().setSectionResizeMode(0, self.table.horizontalHeader().Stretch)
+        self.table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
         self.table.setColumnWidth(1, 130)
         root.addWidget(self.table, 1)
 

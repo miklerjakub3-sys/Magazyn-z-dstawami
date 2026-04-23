@@ -319,6 +319,13 @@ class MagazynService:
     def add_courier(self, name: str) -> None:
         database.add_courier(name)
 
+    # --- Wydania (WZ) ---
+    def add_issue_history(self, issue_date: str, issue_place: str, buyer_name: str, buyer_address: str, items, pdf_path: str = "") -> int:
+        return int(database.add_issue_history(issue_date, issue_place, buyer_name, buyer_address, items, pdf_path))
+
+    def list_issue_history(self, limit: int = 200):
+        return database.list_issue_history(limit=limit)
+
     def remove_sender(self, name: str) -> None:
         database.remove_sender(name)
 

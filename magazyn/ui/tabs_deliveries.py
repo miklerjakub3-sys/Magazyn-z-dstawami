@@ -29,6 +29,7 @@ from PySide6.QtWidgets import (
 )
 
 from ..config import DELIVERY_TYPES, ITEM_TYPE_TO_LABEL, MAX_RESULTS_PER_PAGE
+from ..utils import today_str, validate_ymd, one_line
 from ..log import get_logger
 from ..services import MagazynService
 from ..utils import one_line, validate_ymd
@@ -615,6 +616,17 @@ class DeliveriesTab(QWidget):
             self._restore_column_widths(self.table, "main_table_widths")
             self._restore_header_state(self.table, "main_table_header_state")
             self.table.horizontalHeader().setSortIndicator(self.sort_col, self.sort_dir)
+            for i, r in enumerate(pr.rows):
+                typ = (r[4] or "").upper()
+                it = self.table.item(i, 4)
+                if not it:
+                    continue
+                if typ == "MAGAZYN":
+                    it.setBackground(Qt.GlobalColor.green)
+                elif typ == "SERWIS":
+                    it.setBackground(Qt.GlobalColor.yellow)
+                elif typ in ("WYNAJEM", "WYPOŻYCZENIE"):
+                    it.setBackground(Qt.GlobalColor.cyan)
 
             for i, r in enumerate(pr.rows):
                 typ = (r[4] or "").upper()

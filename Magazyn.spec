@@ -1,4 +1,23 @@
 # -*- mode: python ; coding: utf-8 -*-
+from datetime import datetime
+from pathlib import Path
+
+
+def _safe_exe_name(default_name: str) -> str:
+    """
+    Gdy poprzedni plik EXE jest zablokowany przez działający proces,
+    PyInstaller zgłasza PermissionError przy próbie nadpisania.
+    Wtedy budujemy pod nazwą z timestampem.
+    """
+    root = Path(__file__).resolve().parent
+    target = root / "dist" / f"{default_name}.exe"
+    if not target.exists():
+        return default_name
+    try:
+        target.unlink()
+        return default_name
+    except OSError:
+        return f"{default_name}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
 
 
 a = Analysis(
@@ -26,7 +45,7 @@ exe = EXE(
     a.binaries,
     a.datas,
     [],
-    name='Magazyn',
+    name=_safe_exe_name('Magazyn'),
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,

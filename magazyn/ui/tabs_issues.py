@@ -69,15 +69,6 @@ class IssuesTab(QWidget):
         seller_lbl.setMinimumHeight(150)
         seller_lbl.setProperty("compact", True)
         seller_l.addWidget(seller_lbl)
-        seller_lbl = QLabel(
-            "AXED serwis s.c.\n"
-            "ul. Wagrowska 2\n"
-            "61-369 Poznań\n"
-            "email: biuro@axedserwis.com.pl\n"
-            "tel: 600 373 202\n\n"
-            "NIP: 7822837756\n"
-            "Regon: 381387430"
-        ))
         top.addWidget(seller_box, 1)
 
         buyer_box = QGroupBox("Odbiorca (firma kupująca)")

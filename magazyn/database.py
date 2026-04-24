@@ -10,6 +10,7 @@ import shutil
 import hashlib
 import hmac
 import secrets
+import json
 from datetime import datetime, timedelta
 from typing import Optional, List, Tuple
 from .config import DB_PATH, DELIVERY_ATTACH_DIR, DELIVERY_TYPES
@@ -103,6 +104,20 @@ def init_db():
                 file_name TEXT NOT NULL,
                 created_at TEXT NOT NULL,
                 FOREIGN KEY(delivery_id) REFERENCES deliveries(id) ON DELETE CASCADE
+            )
+        """)
+
+        # Historia wydań (WZ)
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS issue_history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                issue_date TEXT NOT NULL,
+                issue_place TEXT NOT NULL,
+                buyer_name TEXT NOT NULL,
+                buyer_address TEXT NOT NULL,
+                items_json TEXT NOT NULL,
+                pdf_path TEXT,
+                created_at TEXT NOT NULL
             )
         """)
 
@@ -751,6 +766,20 @@ def migrate_db():
             )
             """
         )
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS issue_history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                issue_date TEXT NOT NULL,
+                issue_place TEXT NOT NULL,
+                buyer_name TEXT NOT NULL,
+                buyer_address TEXT NOT NULL,
+                items_json TEXT NOT NULL,
+                pdf_path TEXT,
+                created_at TEXT NOT NULL
+            )
+            """
+        )
 
         # Devices
         cur.execute("PRAGMA table_info(devices)")
@@ -819,6 +848,71 @@ def migrate_db():
         _rebuild_deliveries_with_constraints(cur)
         _rebuild_delivery_attachments_with_constraints(cur)
         _rebuild_devices_with_constraints(cur)
+        conn.commit()
+
+
+def add_issue_history(issue_date: str, issue_place: str, buyer_name: str, buyer_address: str, items, pdf_path: str = "") -> int:
+    issue_date = (issue_date or "").strip()
+    issue_place = (issue_place or "").strip()
+    buyer_name = (buyer_name or "").strip()
+    buyer_address = (buyer_address or "").strip()
+    pdf_path = (pdf_path or "").strip()
+    if not issue_date:
+        issue_date = datetime.now().strftime("%Y-%m-%d")
+    validate_ymd(issue_date)
+    if not issue_place:
+        raise ValueError("Miejsce wystawienia jest wymagane.")
+    if not buyer_name:
+        raise ValueError("Nazwa odbiorcy jest wymagana.")
+    if not buyer_address:
+        raise ValueError("Adres odbiorcy jest wymagany.")
+    if not items:
+        raise ValueError("Lista pozycji jest pusta.")
+
+    serialized_items = json.dumps(items, ensure_ascii=False)
+    created_at = datetime.now().isoformat(timespec="seconds")
+    with get_conn() as conn:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            INSERT INTO issue_history(issue_date, issue_place, buyer_name, buyer_address, items_json, pdf_path, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (issue_date, issue_place, buyer_name, buyer_address, serialized_items, pdf_path, created_at),
+        )
+        conn.commit()
+        return int(cur.lastrowid)
+
+
+def list_issue_history(limit: int = 200):
+    limit = max(1, min(int(limit or 200), 1000))
+    with get_conn() as conn:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT id, issue_date, issue_place, buyer_name, buyer_address, items_json, pdf_path, created_at
+            FROM issue_history
+            ORDER BY id DESC
+            LIMIT ?
+            """,
+            (limit,),
+        )
+        rows = cur.fetchall()
+        out = []
+        for r in rows:
+            try:
+                items = json.loads(r[5] or "[]")
+            except Exception:
+                items = []
+            out.append((r[0], r[1], r[2], r[3], r[4], items, r[6], r[7]))
+        return out
+
+
+def delete_issue_history(issue_id: int) -> None:
+    issue_id = int(issue_id)
+    with get_conn() as conn:
+        cur = conn.cursor()
+        cur.execute("DELETE FROM issue_history WHERE id=?", (issue_id,))
         conn.commit()
 
 

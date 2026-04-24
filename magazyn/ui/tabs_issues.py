@@ -63,11 +63,7 @@ class IssuesTab(QWidget):
             "tel: 600 373 202\n\n"
             "NIP: 7822837756\n"
             "Regon: 381387430"
-        )
-        seller_lbl.setWordWrap(True)
-        seller_lbl.setMinimumHeight(150)
-        seller_lbl.setProperty("compact", True)
-        seller_l.addWidget(seller_lbl)
+        ))
         top.addWidget(seller_box, 1)
 
         buyer_box = QGroupBox("Odbiorca (firma kupująca)")
@@ -119,13 +115,10 @@ class IssuesTab(QWidget):
         self.btn_save_edit = QPushButton("Zapisz edycję zaznaczonego wpisu")
         self.btn_save_edit.setEnabled(False)
         self.btn_generate.setEnabled(PDF_AVAILABLE)
-        actions = QHBoxLayout()
-        actions.setSpacing(8)
-        actions.addWidget(self.btn_generate)
-        actions.addWidget(self.btn_generate_selected)
-        actions.addWidget(self.btn_load_for_edit)
-        actions.addWidget(self.btn_save_edit)
-        card_l.addLayout(actions)
+        card_l.addWidget(self.btn_generate)
+        card_l.addWidget(self.btn_generate_selected)
+        card_l.addWidget(self.btn_load_for_edit)
+        card_l.addWidget(self.btn_save_edit)
 
         if not PDF_AVAILABLE:
             card_l.addWidget(QLabel("Brak reportlab – generowanie WZ PDF wyłączone. Zainstaluj: pip install reportlab"))
@@ -161,24 +154,6 @@ class IssuesTab(QWidget):
         self.btn_delete_history = QPushButton("Usuń zaznaczony wpis historii")
         hist_l.addWidget(self.btn_delete_history)
         root.addWidget(hist_card, 1)
-
-        compact_widgets = [
-            self.in_company,
-            self.in_address,
-            self.in_place,
-            self.in_item_code,
-            self.in_item_name,
-            self.in_item_qty,
-            self.btn_add_item,
-            self.btn_remove_item,
-            self.btn_generate,
-            self.btn_generate_selected,
-            self.btn_load_for_edit,
-            self.btn_save_edit,
-            self.btn_delete_history,
-        ]
-        for w in compact_widgets:
-            w.setProperty("compact", True)
 
         self.btn_add_item.clicked.connect(self.on_add_item)
         self.btn_remove_item.clicked.connect(self.on_remove_item)

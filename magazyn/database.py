@@ -916,6 +916,38 @@ def delete_issue_history(issue_id: int) -> None:
         conn.commit()
 
 
+def update_issue_history(issue_id: int, issue_date: str, issue_place: str, buyer_name: str, buyer_address: str, items, pdf_path: str = "") -> None:
+    issue_id = int(issue_id)
+    issue_date = (issue_date or "").strip()
+    issue_place = (issue_place or "").strip()
+    buyer_name = (buyer_name or "").strip()
+    buyer_address = (buyer_address or "").strip()
+    pdf_path = (pdf_path or "").strip()
+    if not issue_date:
+        issue_date = datetime.now().strftime("%Y-%m-%d")
+    validate_ymd(issue_date)
+    if not issue_place:
+        raise ValueError("Miejsce wystawienia jest wymagane.")
+    if not buyer_name:
+        raise ValueError("Nazwa odbiorcy jest wymagana.")
+    if not buyer_address:
+        raise ValueError("Adres odbiorcy jest wymagany.")
+    if not items:
+        raise ValueError("Lista pozycji jest pusta.")
+    serialized_items = json.dumps(items, ensure_ascii=False)
+    with get_conn() as conn:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            UPDATE issue_history
+            SET issue_date=?, issue_place=?, buyer_name=?, buyer_address=?, items_json=?, pdf_path=?
+            WHERE id=?
+            """,
+            (issue_date, issue_place, buyer_name, buyer_address, serialized_items, pdf_path, issue_id),
+        )
+        conn.commit()
+
+
 def _normalize_existing_logins(cur: sqlite3.Cursor) -> None:
     cur.execute("SELECT id, login FROM app_users ORDER BY id")
     for user_id, login in cur.fetchall():

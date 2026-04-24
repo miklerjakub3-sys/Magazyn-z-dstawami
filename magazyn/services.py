@@ -329,6 +329,9 @@ class MagazynService:
     def delete_issue_history(self, issue_id: int) -> None:
         database.delete_issue_history(issue_id)
 
+    def update_issue_history(self, issue_id: int, issue_date: str, issue_place: str, buyer_name: str, buyer_address: str, items, pdf_path: str = "") -> None:
+        database.update_issue_history(issue_id, issue_date, issue_place, buyer_name, buyer_address, items, pdf_path=pdf_path)
+
     def remove_sender(self, name: str) -> None:
         database.remove_sender(name)
 

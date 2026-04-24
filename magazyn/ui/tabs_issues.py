@@ -33,6 +33,9 @@ class IssuesTab(QWidget):
     def __init__(self, svc: MagazynService):
         super().__init__()
         self.svc = svc
+        self.edit_issue_id = None
+        self.edit_issue_date = None
+        self._history_cache = []
         self._build()
         self.refresh_history()
 
@@ -95,16 +98,27 @@ class IssuesTab(QWidget):
 
         self.table = QTableWidget(0, 3)
         self.table.setHorizontalHeaderLabels(["Kod towaru", "Nazwa towaru", "Ilość (szt.)"])
+        self.table.setMinimumHeight(170)
+        self.table.verticalHeader().setVisible(False)
         self.table.horizontalHeader().setStretchLastSection(False)
-        self.table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
+        self.table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Interactive)
         self.table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
-        self.table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeToContents)
+        self.table.horizontalHeader().setSectionResizeMode(2, QHeaderView.Interactive)
+        self.table.setColumnWidth(0, 170)
+        self.table.setColumnWidth(2, 110)
         self.table.setAlternatingRowColors(True)
         card_l.addWidget(self.table, 1)
 
         self.btn_generate = QPushButton("Generuj PDF WZ")
+        self.btn_generate_selected = QPushButton("Generuj ponownie z zaznaczonego wpisu")
+        self.btn_load_for_edit = QPushButton("Wczytaj zaznaczony wpis do edycji")
+        self.btn_save_edit = QPushButton("Zapisz edycję zaznaczonego wpisu")
+        self.btn_save_edit.setEnabled(False)
         self.btn_generate.setEnabled(PDF_AVAILABLE)
         card_l.addWidget(self.btn_generate)
+        card_l.addWidget(self.btn_generate_selected)
+        card_l.addWidget(self.btn_load_for_edit)
+        card_l.addWidget(self.btn_save_edit)
 
         if not PDF_AVAILABLE:
             card_l.addWidget(QLabel("Brak reportlab – generowanie WZ PDF wyłączone. Zainstaluj: pip install reportlab"))
@@ -144,8 +158,11 @@ class IssuesTab(QWidget):
         self.btn_add_item.clicked.connect(self.on_add_item)
         self.btn_remove_item.clicked.connect(self.on_remove_item)
         self.btn_generate.clicked.connect(self.on_generate_pdf)
+        self.btn_generate_selected.clicked.connect(self.on_generate_again_from_selected)
         self.hist_table.itemSelectionChanged.connect(self.on_history_selected)
         self.btn_delete_history.clicked.connect(self.on_delete_history)
+        self.btn_load_for_edit.clicked.connect(self.on_load_selected_to_form)
+        self.btn_save_edit.clicked.connect(self.on_save_edited_issue)
 
     def on_add_item(self) -> None:
         name = self.in_item_name.text().strip()
@@ -189,6 +206,7 @@ class IssuesTab(QWidget):
     def refresh_history(self) -> None:
         try:
             rows = self.svc.list_issue_history(limit=300)
+            self._history_cache = list(rows)
         except Exception:
             log.exception("issue history load failed")
             rows = []
@@ -212,7 +230,7 @@ class IssuesTab(QWidget):
             issue_id = int(self.hist_table.item(idx, 0).text())
         except Exception:
             return
-        rows = self.svc.list_issue_history(limit=300)
+        rows = self._history_cache
         selected = None
         for r in rows:
             if int(r[0]) == issue_id:
@@ -232,6 +250,39 @@ class IssuesTab(QWidget):
             self.hist_items.setItem(row, 1, QTableWidgetItem(str(item.get("name", ""))))
             self.hist_items.setItem(row, 2, QTableWidgetItem(str(item.get("qty", ""))))
 
+    def _selected_history_entry(self):
+        idx = self.hist_table.currentRow()
+        if idx < 0:
+            return None
+        try:
+            issue_id = int(self.hist_table.item(idx, 0).text())
+        except Exception:
+            return None
+        for row in self._history_cache:
+            if int(row[0]) == issue_id:
+                return row
+        return None
+
+    def on_load_selected_to_form(self) -> None:
+        selected = self._selected_history_entry()
+        if not selected:
+            QMessageBox.information(self, "Info", "Zaznacz wpis historii do edycji.")
+            return
+        self.in_company.setText(selected[3] or "")
+        self.in_address.setText(selected[4] or "")
+        self.in_place.setText(selected[2] or "Poznań")
+        self.table.setRowCount(0)
+        for item in (selected[5] or []):
+            row = self.table.rowCount()
+            self.table.insertRow(row)
+            self.table.setItem(row, 0, QTableWidgetItem(str(item.get("code", ""))))
+            self.table.setItem(row, 1, QTableWidgetItem(str(item.get("name", ""))))
+            self.table.setItem(row, 2, QTableWidgetItem(str(item.get("qty", ""))))
+        self.edit_issue_id = int(selected[0])
+        self.edit_issue_date = str(selected[1] or date.today().isoformat())
+        self.btn_save_edit.setEnabled(True)
+        QMessageBox.information(self, "Edycja", f"Załadowano wpis ID={self.edit_issue_id} do edycji.")
+
     def on_delete_history(self) -> None:
         idx = self.hist_table.currentRow()
         if idx < 0:
@@ -250,6 +301,39 @@ class IssuesTab(QWidget):
         self.refresh_history()
         self.hist_items.setRowCount(0)
         self.hist_preview.setText("Wpis usunięty.")
+        if self.edit_issue_id == int(issue_id):
+            self.edit_issue_id = None
+            self.edit_issue_date = None
+            self.btn_save_edit.setEnabled(False)
+
+    def on_generate_again_from_selected(self) -> None:
+        selected = self._selected_history_entry()
+        if not selected:
+            QMessageBox.information(self, "Info", "Zaznacz wpis historii do ponownego wygenerowania.")
+            return
+        issue_date, place, buyer, address, items = selected[1], selected[2], selected[3], selected[4], selected[5] or []
+        default_name = f"WZ_{buyer}_{issue_date}.pdf".replace(" ", "_")
+        path, _ = QFileDialog.getSaveFileName(self, "Zapisz ponownie dokument WZ", default_name, "PDF (*.pdf)")
+        if not path:
+            return
+        export_wz_to_pdf(path, buyer, address, place, items, issue_date=issue_date)
+        QMessageBox.information(self, "OK", f"Wygenerowano ponownie PDF:\n{path}")
+
+    def on_save_edited_issue(self) -> None:
+        if self.edit_issue_id is None:
+            QMessageBox.information(self, "Info", "Najpierw wczytaj wpis historii do edycji.")
+            return
+        company = self.in_company.text().strip()
+        address = self.in_address.text().strip()
+        place = self.in_place.text().strip()
+        items = self._collect_items()
+        if not company or not address or not place or not items:
+            QMessageBox.warning(self, "Błąd", "Uzupełnij dane odbiorcy, miejsce i pozycje.")
+            return
+        issue_date = self.edit_issue_date or date.today().isoformat()
+        self.svc.update_issue_history(self.edit_issue_id, issue_date, place, company, address, items)
+        self.refresh_history()
+        QMessageBox.information(self, "OK", f"Zapisano edycję wpisu ID={self.edit_issue_id}.")
 
     def on_generate_pdf(self) -> None:
         try:

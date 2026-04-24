@@ -326,6 +326,9 @@ class MagazynService:
     def list_issue_history(self, limit: int = 200):
         return database.list_issue_history(limit=limit)
 
+    def delete_issue_history(self, issue_id: int) -> None:
+        database.delete_issue_history(issue_id)
+
     def remove_sender(self, name: str) -> None:
         database.remove_sender(name)
 

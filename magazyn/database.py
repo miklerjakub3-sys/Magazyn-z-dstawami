@@ -908,6 +908,14 @@ def list_issue_history(limit: int = 200):
         return out
 
 
+def delete_issue_history(issue_id: int) -> None:
+    issue_id = int(issue_id)
+    with get_conn() as conn:
+        cur = conn.cursor()
+        cur.execute("DELETE FROM issue_history WHERE id=?", (issue_id,))
+        conn.commit()
+
+
 def _normalize_existing_logins(cur: sqlite3.Cursor) -> None:
     cur.execute("SELECT id, login FROM app_users ORDER BY id")
     for user_id, login in cur.fetchall():

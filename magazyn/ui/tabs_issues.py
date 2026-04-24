@@ -77,12 +77,15 @@ class IssuesTab(QWidget):
 
         row = QHBoxLayout()
         card_l.addLayout(row)
+        self.in_item_code = QLineEdit()
         self.in_item_name = QLineEdit()
         self.in_item_qty = QSpinBox()
         self.in_item_qty.setRange(1, 1_000_000)
         self.in_item_qty.setValue(1)
         self.btn_add_item = QPushButton("Dodaj pozycję")
         self.btn_remove_item = QPushButton("Usuń zaznaczoną")
+        row.addWidget(QLabel("Kod:"))
+        row.addWidget(self.in_item_code)
         row.addWidget(QLabel("Nazwa towaru:"))
         row.addWidget(self.in_item_name, 1)
         row.addWidget(QLabel("Ilość (szt.):"))
@@ -90,11 +93,12 @@ class IssuesTab(QWidget):
         row.addWidget(self.btn_add_item)
         row.addWidget(self.btn_remove_item)
 
-        self.table = QTableWidget(0, 2)
-        self.table.setHorizontalHeaderLabels(["Nazwa towaru", "Ilość (szt.)"])
+        self.table = QTableWidget(0, 3)
+        self.table.setHorizontalHeaderLabels(["Kod towaru", "Nazwa towaru", "Ilość (szt.)"])
         self.table.horizontalHeader().setStretchLastSection(False)
-        self.table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
-        self.table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeToContents)
+        self.table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
+        self.table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
+        self.table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeToContents)
         self.table.setAlternatingRowColors(True)
         card_l.addWidget(self.table, 1)
 
@@ -120,12 +124,28 @@ class IssuesTab(QWidget):
         self.hist_table.horizontalHeader().setSectionResizeMode(5, QHeaderView.Stretch)
         self.hist_table.setEditTriggers(QTableWidget.NoEditTriggers)
         self.hist_table.setSelectionBehavior(QTableWidget.SelectRows)
+        self.hist_table.setSelectionMode(QTableWidget.SingleSelection)
         hist_l.addWidget(self.hist_table)
+        self.hist_preview = QLabel("Podgląd wpisu: wybierz dokument z historii, aby zobaczyć szczegóły.")
+        self.hist_preview.setWordWrap(True)
+        self.hist_preview.setProperty("subtitle", True)
+        hist_l.addWidget(self.hist_preview)
+        self.hist_items = QTableWidget(0, 3)
+        self.hist_items.setHorizontalHeaderLabels(["Kod", "Nazwa", "Ilość"])
+        self.hist_items.setEditTriggers(QTableWidget.NoEditTriggers)
+        self.hist_items.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
+        self.hist_items.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
+        self.hist_items.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeToContents)
+        hist_l.addWidget(self.hist_items)
+        self.btn_delete_history = QPushButton("Usuń zaznaczony wpis historii")
+        hist_l.addWidget(self.btn_delete_history)
         root.addWidget(hist_card, 1)
 
         self.btn_add_item.clicked.connect(self.on_add_item)
         self.btn_remove_item.clicked.connect(self.on_remove_item)
         self.btn_generate.clicked.connect(self.on_generate_pdf)
+        self.hist_table.itemSelectionChanged.connect(self.on_history_selected)
+        self.btn_delete_history.clicked.connect(self.on_delete_history)
 
     def on_add_item(self) -> None:
         name = self.in_item_name.text().strip()
@@ -136,8 +156,10 @@ class IssuesTab(QWidget):
 
         row = self.table.rowCount()
         self.table.insertRow(row)
-        self.table.setItem(row, 0, QTableWidgetItem(name))
-        self.table.setItem(row, 1, QTableWidgetItem(str(qty)))
+        self.table.setItem(row, 0, QTableWidgetItem(self.in_item_code.text().strip()))
+        self.table.setItem(row, 1, QTableWidgetItem(name))
+        self.table.setItem(row, 2, QTableWidgetItem(str(qty)))
+        self.in_item_code.clear()
         self.in_item_name.clear()
         self.in_item_name.setFocus()
 
@@ -149,8 +171,10 @@ class IssuesTab(QWidget):
     def _collect_items(self):
         items = []
         for row in range(self.table.rowCount()):
-            name_item = self.table.item(row, 0)
-            qty_item = self.table.item(row, 1)
+            code_item = self.table.item(row, 0)
+            name_item = self.table.item(row, 1)
+            qty_item = self.table.item(row, 2)
+            code = (code_item.text() if code_item else "").strip()
             name = (name_item.text() if name_item else "").strip()
             qty_raw = (qty_item.text() if qty_item else "1").strip()
             if not name:
@@ -159,7 +183,7 @@ class IssuesTab(QWidget):
                 qty = max(1, int(qty_raw))
             except ValueError:
                 qty = 1
-            items.append({"name": name, "qty": qty})
+            items.append({"code": code, "name": name, "qty": qty})
         return items
 
     def refresh_history(self) -> None:
@@ -179,6 +203,53 @@ class IssuesTab(QWidget):
             self.hist_table.setItem(row, 3, QTableWidgetItem(r[3] or ""))
             self.hist_table.setItem(row, 4, QTableWidgetItem(str(len(r[5] or []))))
             self.hist_table.setItem(row, 5, QTableWidgetItem(r[6] or ""))
+
+    def on_history_selected(self) -> None:
+        idx = self.hist_table.currentRow()
+        if idx < 0:
+            return
+        try:
+            issue_id = int(self.hist_table.item(idx, 0).text())
+        except Exception:
+            return
+        rows = self.svc.list_issue_history(limit=300)
+        selected = None
+        for r in rows:
+            if int(r[0]) == issue_id:
+                selected = r
+                break
+        if not selected:
+            return
+        self.hist_preview.setText(
+            f"ID: {selected[0]} | Data: {selected[1]} | Miejsce: {selected[2]}\n"
+            f"Odbiorca: {selected[3]}\nAdres: {selected[4]}\nPDF: {selected[6] or 'brak'}"
+        )
+        self.hist_items.setRowCount(0)
+        for item in (selected[5] or []):
+            row = self.hist_items.rowCount()
+            self.hist_items.insertRow(row)
+            self.hist_items.setItem(row, 0, QTableWidgetItem(str(item.get("code", ""))))
+            self.hist_items.setItem(row, 1, QTableWidgetItem(str(item.get("name", ""))))
+            self.hist_items.setItem(row, 2, QTableWidgetItem(str(item.get("qty", ""))))
+
+    def on_delete_history(self) -> None:
+        idx = self.hist_table.currentRow()
+        if idx < 0:
+            QMessageBox.information(self, "Info", "Zaznacz wpis historii do usunięcia.")
+            return
+        issue_id = self.hist_table.item(idx, 0).text()
+        prompts = [
+            "Potwierdzenie 1/3: na pewno usunąć wpis historii?",
+            "Potwierdzenie 2/3: ta operacja jest nieodwracalna. Kontynuować?",
+            f"Potwierdzenie 3/3: usuń wpis ID={issue_id}?",
+        ]
+        for msg in prompts:
+            if QMessageBox.question(self, "Potwierdzenie usunięcia", msg, QMessageBox.Yes | QMessageBox.No, QMessageBox.No) != QMessageBox.Yes:
+                return
+        self.svc.delete_issue_history(int(issue_id))
+        self.refresh_history()
+        self.hist_items.setRowCount(0)
+        self.hist_preview.setText("Wpis usunięty.")
 
     def on_generate_pdf(self) -> None:
         try:

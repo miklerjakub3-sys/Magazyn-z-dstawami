@@ -279,14 +279,12 @@ def export_wz_to_pdf(filename, buyer_name, buyer_address, issue_place, items, is
     ]
 
     story = []
-    header_data = [
-        [Paragraph("Wydanie zewnętrzne (WZ)", styles["Title"]), ""],
-    ]
+    header_data = [[Paragraph("<b>AXED serwis</b>", styles["Normal"]), "Oryginał / Kopia"]]
     if logo_path:
         try:
             header_data[0][1] = RLImage(logo_path, width=120, height=45)
         except Exception:
-            header_data[0][1] = ""
+            header_data[0][1] = Paragraph("<b>AXED serwis</b>", styles["Normal"])
 
     header = Table(header_data, colWidths=[doc.width - 130, 130])
     header.setStyle(
@@ -302,17 +300,56 @@ def export_wz_to_pdf(filename, buyer_name, buyer_address, issue_place, items, is
         )
     )
     story.append(header)
-    story.append(Spacer(1, 6))
-    story.append(Paragraph(f"Data wystawienia: {issue_date}", styles["Info"]))
-    story.append(Paragraph(f"Miejsce wystawienia: {issue_place}", styles["Info"]))
-    story.append(Paragraph(f"Numer dokumentu: {doc_no}", styles["Info"]))
+    story.append(Spacer(1, 8))
+
+    title_table = Table(
+        [[Paragraph("<b>DOKUMENT WYDANIA ZEWNĘTRZNEGO (WZ)</b>", styles["Title"])]],
+        colWidths=[doc.width],
+    )
+    title_table.setStyle(
+        TableStyle(
+            [
+                ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+                ("LINEABOVE", (0, 0), (-1, 0), 1.6, colors.HexColor("#1f2937")),
+                ("LINEBELOW", (0, 0), (-1, 0), 0.6, colors.HexColor("#cbd5e1")),
+                ("TOPPADDING", (0, 0), (-1, -1), 10),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 10),
+            ]
+        )
+    )
+    story.append(title_table)
+    story.append(Spacer(1, 4))
+    story.append(Paragraph(f"<b>Seria i numer:</b> {doc_no}", styles["Info"]))
+    story.append(Spacer(1, 2))
+
+    meta_table = Table(
+        [[f"Data wystawienia: {issue_date}", f"Miejsce wystawienia: {issue_place}"]],
+        colWidths=[doc.width / 2, doc.width / 2],
+    )
+    meta_table.setStyle(
+        TableStyle(
+            [
+                ("FONTNAME", (0, 0), (-1, -1), _FONT_NAME),
+                ("FONTSIZE", (0, 0), (-1, -1), 9),
+                ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+            ]
+        )
+    )
+    story.append(meta_table)
     story.append(Spacer(1, 10))
 
     party_table = Table(
-        [[
-            Paragraph("<b>Wystawca (sprzedawca):</b><br/>" + "<br/>".join(seller_lines), styles["Normal"]),
-            Paragraph("<b>Odbiorca:</b><br/>" + buyer_name + "<br/>" + buyer_address.replace("\n", "<br/>"), styles["Normal"]),
-        ]],
+        [
+            [
+                Paragraph("<b>WYSTAWCA (SPRZEDAWCA)</b>", styles["Normal"]),
+                Paragraph("<b>ODBIORCA DOKUMENTU</b>", styles["Normal"]),
+            ],
+            [
+                Paragraph("<br/>".join(seller_lines), styles["Normal"]),
+                Paragraph("<b>" + buyer_name + "</b><br/>" + buyer_address.replace("\n", "<br/>"), styles["Normal"]),
+            ],
+        ],
         colWidths=[doc.width / 2, doc.width / 2],
     )
     party_table.setStyle(
@@ -320,6 +357,8 @@ def export_wz_to_pdf(filename, buyer_name, buyer_address, issue_place, items, is
             [
                 ("BOX", (0, 0), (-1, -1), 0.5, colors.HexColor("#9ca3af")),
                 ("INNERGRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#9ca3af")),
+                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#1f2937")),
+                ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
                 ("LEFTPADDING", (0, 0), (-1, -1), 8),
                 ("RIGHTPADDING", (0, 0), (-1, -1), 8),
                 ("TOPPADDING", (0, 0), (-1, -1), 6),
@@ -329,13 +368,39 @@ def export_wz_to_pdf(filename, buyer_name, buyer_address, issue_place, items, is
         )
     )
     story.append(party_table)
-    story.append(Spacer(1, 12))
+    story.append(Spacer(1, 8))
 
-    rows = [["Lp.", "Nazwa towaru", "Ilość (szt.)"]]
+    remarks = Table(
+        [[
+            Paragraph(
+                "<b>Cel wydania i uwagi:</b><br/>"
+                "Dostawa części zamiennych i akcesoriów serwisowych. "
+                "Transport: przesyłka kurierska.",
+                styles["Info"],
+            )
+        ]],
+        colWidths=[doc.width],
+    )
+    remarks.setStyle(
+        TableStyle(
+            [
+                ("BOX", (0, 0), (-1, -1), 0.4, colors.HexColor("#cbd5e1")),
+                ("LEFTPADDING", (0, 0), (-1, -1), 8),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 8),
+                ("TOPPADDING", (0, 0), (-1, -1), 6),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+                ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#f8fafc")),
+            ]
+        )
+    )
+    story.append(remarks)
+    story.append(Spacer(1, 10))
+
+    rows = [["Lp.", "Kod towaru", "Nazwa towaru / opis", "Ilość (szt.)"]]
     for idx, item in enumerate(items, start=1):
-        rows.append([str(idx), item["name"], str(item["qty"])])
+        rows.append([str(idx), item.get("code", ""), item["name"], str(item["qty"])])
 
-    items_table = Table(rows, colWidths=[42, doc.width - 132, 90], repeatRows=1)
+    items_table = Table(rows, colWidths=[34, 110, doc.width - 234, 90], repeatRows=1)
     items_table.setStyle(
         TableStyle(
             [
@@ -346,14 +411,21 @@ def export_wz_to_pdf(filename, buyer_name, buyer_address, issue_place, items, is
                 ("FONTNAME", (0, 1), (-1, -1), _FONT_NAME),
                 ("FONTSIZE", (0, 0), (-1, -1), 9),
                 ("ALIGN", (0, 0), (0, -1), "CENTER"),
-                ("ALIGN", (2, 1), (2, -1), "CENTER"),
+                ("ALIGN", (3, 1), (3, -1), "CENTER"),
                 ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
                 ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#f9fafb")]),
             ]
         )
     )
     story.append(items_table)
-    story.append(Spacer(1, 30))
+    story.append(Spacer(1, 12))
+    story.append(
+        Paragraph(
+            "<b>Uwagi dodatkowe i klauzula akceptacji:</b> Odbiorca potwierdza zgodność ilościową towaru z dokumentem.",
+            styles["Info"],
+        )
+    )
+    story.append(Spacer(1, 18))
 
     sign_table = Table(
         [["Wydał: ______________________", "Odebrał: ______________________"]],

@@ -55,7 +55,7 @@ class IssuesTab(QWidget):
 
         seller_box = QGroupBox("Wystawca (stałe dane)")
         seller_l = QVBoxLayout(seller_box)
-        seller_l.addWidget(QLabel(
+        seller_lbl = QLabel(
             "AXED serwis s.c.\n"
             "ul. Wagrowska 2\n"
             "61-369 Poznań\n"
@@ -98,7 +98,7 @@ class IssuesTab(QWidget):
 
         self.table = QTableWidget(0, 3)
         self.table.setHorizontalHeaderLabels(["Kod towaru", "Nazwa towaru", "Ilość (szt.)"])
-        self.table.setMinimumHeight(170)
+        self.table.setMinimumHeight(130)
         self.table.verticalHeader().setVisible(False)
         self.table.horizontalHeader().setStretchLastSection(False)
         self.table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Interactive)

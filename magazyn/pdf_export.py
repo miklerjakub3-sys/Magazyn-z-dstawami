@@ -357,8 +357,9 @@ def export_wz_to_pdf(filename, buyer_name, buyer_address, issue_place, items, is
             [
                 ("BOX", (0, 0), (-1, -1), 0.5, colors.HexColor("#9ca3af")),
                 ("INNERGRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#9ca3af")),
-                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#1f2937")),
-                ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#dbeafe")),
+                ("BACKGROUND", (0, 1), (-1, 1), colors.HexColor("#f8fafc")),
+                ("TEXTCOLOR", (0, 0), (-1, 0), colors.HexColor("#0f172a")),
                 ("LEFTPADDING", (0, 0), (-1, -1), 8),
                 ("RIGHTPADDING", (0, 0), (-1, -1), 8),
                 ("TOPPADDING", (0, 0), (-1, -1), 6),

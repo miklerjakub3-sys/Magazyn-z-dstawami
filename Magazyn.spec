@@ -9,7 +9,8 @@ def _safe_exe_name(default_name: str) -> str:
     PyInstaller zgłasza PermissionError przy próbie nadpisania.
     Wtedy budujemy pod nazwą z timestampem.
     """
-    root = Path(__file__).resolve().parent
+    spec_root = globals().get("SPECPATH")
+    root = Path(spec_root).resolve() if spec_root else Path.cwd()
     target = root / "dist" / f"{default_name}.exe"
     if not target.exists():
         return default_name

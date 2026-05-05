@@ -121,6 +121,26 @@ def init_db():
             )
         """)
 
+        # Wyniki AnTuTu
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS antutu_results (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                producer TEXT,
+                model TEXT,
+                android_version TEXT,
+                processor TEXT,
+                ram TEXT,
+                antutu_version TEXT,
+                score_total INTEGER,
+                score_cpu INTEGER,
+                score_gpu INTEGER,
+                score_mem INTEGER,
+                score_ux INTEGER,
+                notes TEXT,
+                created_at TEXT NOT NULL
+            )
+        """)
+
         # Użytkownicy / role / uprawnienia
         cur.execute("""
             CREATE TABLE IF NOT EXISTS app_roles (
@@ -256,7 +276,9 @@ def seed_auth_defaults() -> None:
         ("deliveries.edit", "Dostawy: edycja"),
         ("reports.export", "Raporty: eksport"),
         ("backup.manage", "Backup: zarządzanie"),
-        ("users.manage", "Użytkownicy: zarządzanie"),
+("users.manage", "Użytkownicy: zarządzanie"),
+        ("antutu.view", "AnTuTu: podgląd"),
+        ("antutu.edit", "AnTuTu: edycja"),
     ]
     with get_conn() as conn:
         cur = conn.cursor()
@@ -1864,3 +1886,45 @@ def delete_delivery_attachment(att_id: int, delete_file: bool = True):
                         os.rmdir(folder)
                 except Exception:
                     pass
+
+
+# =======================
+#  ANTuTu
+# =======================
+def add_antutu_result(producer: str, model: str, android_version: str, processor: str, ram: str, antutu_version: str,
+                      score_total: Optional[int], score_cpu: Optional[int], score_gpu: Optional[int],
+                      score_mem: Optional[int], score_ux: Optional[int], notes: str) -> int:
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    with get_conn() as conn:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            INSERT INTO antutu_results(
+                producer, model, android_version, processor, ram, antutu_version,
+                score_total, score_cpu, score_gpu, score_mem, score_ux, notes, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (producer, model, android_version, processor, ram, antutu_version, score_total, score_cpu, score_gpu, score_mem, score_ux, notes, now),
+        )
+        conn.commit()
+        return int(cur.lastrowid)
+
+
+def list_antutu_results() -> List[Tuple]:
+    with get_conn() as conn:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT id, producer, model, android_version, processor, ram, antutu_version,
+                   score_total, score_cpu, score_gpu, score_mem, score_ux, notes, created_at
+            FROM antutu_results
+            ORDER BY id DESC
+            """
+        )
+        return cur.fetchall()
+
+
+def delete_antutu_result(result_id: int) -> None:
+    with get_conn() as conn:
+        conn.execute("DELETE FROM antutu_results WHERE id=?", (result_id,))
+        conn.commit()

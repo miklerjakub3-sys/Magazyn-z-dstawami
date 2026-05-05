@@ -92,6 +92,7 @@ class AntutuTab(QWidget):
         self.table.setSelectionMode(QTableWidget.SingleSelection)
         self.table.setEditTriggers(QTableWidget.NoEditTriggers)
         self.table.setAlternatingRowColors(True)
+        self.table.setSortingEnabled(True)
         root.addWidget(self.table, 1)
 
         apk_box = QGroupBox("Pliki APK AnTuTu")
@@ -105,12 +106,18 @@ class AntutuTab(QWidget):
 
     def refresh(self) -> None:
         rows = self.svc.list_antutu_results()
+        self.table.setSortingEnabled(False)
         self.table.setRowCount(0)
+        numeric_cols = {0, 7, 8, 9, 10, 11}
         for row_data in rows:
             row_idx = self.table.rowCount()
             self.table.insertRow(row_idx)
             for col, value in enumerate(row_data[:13]):
-                self.table.setItem(row_idx, col, QTableWidgetItem("" if value is None else str(value)))
+                item = QTableWidgetItem("" if value is None else str(value))
+                if col in numeric_cols and value not in (None, ""):
+                    item.setData(Qt.EditRole, int(value))
+                self.table.setItem(row_idx, col, item)
+        self.table.setSortingEnabled(True)
 
     def on_add(self) -> None:
         self.svc.add_antutu_result(

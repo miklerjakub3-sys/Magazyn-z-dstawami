@@ -16,6 +16,7 @@ ATTACH_DIR = APP_DIR / "attachments"
 DELIVERY_ATTACH_DIR = APP_DIR / "delivery_attachments"
 BACKUP_DIR = APP_DIR / "backups"
 LOG_FILE = APP_DIR / "magazyn_errors.log"
+ANTUTU_APK_DIR = APP_DIR / "antutu_apk"
 
 MAX_LOG_SIZE = 10 * 1024 * 1024
 MAX_RESULTS_PER_PAGE = 100
@@ -63,5 +64,5 @@ COURIERS = [
 
 
 def ensure_dirs() -> None:
-    for directory in (APP_DIR, ATTACH_DIR, DELIVERY_ATTACH_DIR, BACKUP_DIR):
+    for directory in (APP_DIR, ATTACH_DIR, DELIVERY_ATTACH_DIR, BACKUP_DIR, ANTUTU_APK_DIR):
         os.makedirs(directory, exist_ok=True)

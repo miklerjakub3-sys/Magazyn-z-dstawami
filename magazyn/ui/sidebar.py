@@ -37,6 +37,7 @@ class SidebarNav(QFrame):
             ("deliveries", "🚚  Dostawy"),
             ("issues", "🧾  Wydania (WZ)"),
             ("reports", "📄  Raporty"),
+            ("antutu", "📊  AnTuTu"),
             ("settings", "⚙️  Ustawienia"),
         ]:
             btn = QPushButton(text)

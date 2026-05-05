@@ -22,6 +22,7 @@ from typing import List, Optional, Tuple, Sequence, Any
 from . import database
 from .backup import backup_manager
 from .config import MAIN_ADMIN_LOGIN, RESET_CODE_TTL_MINUTES, SMTP_FROM, SMTP_HOST, SMTP_PASSWORD, SMTP_PORT, SMTP_USERNAME, SMTP_USE_TLS
+from .config import ANTUTU_APK_DIR
 from .log import get_logger
 
 log = get_logger("magazyn.services")
@@ -200,6 +201,31 @@ class MagazynService:
         ok = database.consume_admin_recovery_code(MAIN_ADMIN_LOGIN, code_hash, packed)
         if not ok:
             raise ValueError("Kod odzyskiwania jest nieprawidłowy, zużyty lub chwilowo zablokowany.")
+
+    def list_antutu_results(self):
+        self._require("antutu.view")
+        return database.list_antutu_results()
+
+    def add_antutu_result(self, **kwargs) -> int:
+        self._require("antutu.edit")
+        return int(database.add_antutu_result(**kwargs))
+
+    def delete_antutu_result(self, result_id: int) -> None:
+        self._require("antutu.edit")
+        database.delete_antutu_result(result_id)
+
+    def copy_antutu_apk(self, src_path: str) -> str:
+        self._require("antutu.edit")
+        from pathlib import Path
+        import shutil
+
+        src = Path(src_path)
+        if not src.exists() or src.suffix.lower() != ".apk":
+            raise ValueError("Wybierz poprawny plik .apk")
+        ANTUTU_APK_DIR.mkdir(parents=True, exist_ok=True)
+        dst = ANTUTU_APK_DIR / src.name
+        shutil.copy2(src, dst)
+        return str(dst)
 
     # --- Devices ---
     def search_devices(

@@ -26,6 +26,7 @@ from .issues_ui import IssuesTab
 from .receipts_ui import ReceiptsTab
 from .report_ui import ReportsTab
 from .settings_ui import SettingsPage
+from .antutu_ui import AntutuTab
 from .sidebar import SidebarNav
 
 log = get_logger("magazyn.ui.main")
@@ -81,9 +82,10 @@ class MainWindow(QMainWindow):
             "deliveries": DeliveriesTab(self.svc),
             "issues": IssuesTab(self.svc),
             "reports": ReportsTab(self.svc),
+            "antutu": AntutuTab(self.svc),
             "settings": SettingsPage(self.svc),
         }
-        for key in ["dashboard", "receipts", "deliveries", "issues", "reports", "settings"]:
+        for key in ["dashboard", "receipts", "deliveries", "issues", "reports", "antutu", "settings"]:
             self.stack.addWidget(self.pages[key])
 
         content_l.addWidget(self.stack, 1)
@@ -104,6 +106,7 @@ class MainWindow(QMainWindow):
             "deliveries": "Dostawy",
             "issues": "Wydania (WZ)",
             "reports": "Raporty",
+            "antutu": "AnTuTu",
             "settings": "Ustawienia",
         }
         page = self.pages.get(key)

@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import date
 
 from PySide6.QtWidgets import (
+    QDialog,
     QFileDialog,
     QFormLayout,
     QFrame,
@@ -118,6 +119,8 @@ class IssuesTab(QWidget):
         self.btn_generate_selected = QPushButton("Generuj ponownie z zaznaczonego wpisu")
         self.btn_load_for_edit = QPushButton("Wczytaj zaznaczony wpis do edycji")
         self.btn_save_edit = QPushButton("Zapisz edycję zaznaczonego wpisu")
+        self.btn_clear_form = QPushButton("Wyczyść formularz")
+        self.btn_preview_selected = QPushButton("Podgląd wpisu z historią pozycji")
         self.btn_save_edit.setEnabled(False)
         self.btn_generate.setEnabled(PDF_AVAILABLE)
         actions = QHBoxLayout()
@@ -126,6 +129,8 @@ class IssuesTab(QWidget):
         actions.addWidget(self.btn_generate_selected)
         actions.addWidget(self.btn_load_for_edit)
         actions.addWidget(self.btn_save_edit)
+        actions.addWidget(self.btn_clear_form)
+        actions.addWidget(self.btn_preview_selected)
         card_l.addLayout(actions)
 
         if not PDF_AVAILABLE:
@@ -176,6 +181,8 @@ class IssuesTab(QWidget):
             self.btn_generate_selected,
             self.btn_load_for_edit,
             self.btn_save_edit,
+            self.btn_clear_form,
+            self.btn_preview_selected,
             self.btn_delete_history,
         ]
         for w in compact_widgets:
@@ -189,6 +196,8 @@ class IssuesTab(QWidget):
         self.btn_delete_history.clicked.connect(self.on_delete_history)
         self.btn_load_for_edit.clicked.connect(self.on_load_selected_to_form)
         self.btn_save_edit.clicked.connect(self.on_save_edited_issue)
+        self.btn_clear_form.clicked.connect(self.clear_form)
+        self.btn_preview_selected.clicked.connect(self.on_preview_selected)
 
     def on_add_item(self) -> None:
         name = self.in_item_name.text().strip()
@@ -360,6 +369,45 @@ class IssuesTab(QWidget):
         self.svc.update_issue_history(self.edit_issue_id, issue_date, place, company, address, items)
         self.refresh_history()
         QMessageBox.information(self, "OK", f"Zapisano edycję wpisu ID={self.edit_issue_id}.")
+
+    def clear_form(self) -> None:
+        self.in_company.clear()
+        self.in_address.clear()
+        self.in_place.setText("Poznań")
+        self.in_item_code.clear()
+        self.in_item_name.clear()
+        self.in_item_qty.setValue(1)
+        self.table.setRowCount(0)
+        self.edit_issue_id = None
+        self.edit_issue_date = None
+        self.btn_save_edit.setEnabled(False)
+
+    def on_preview_selected(self) -> None:
+        selected = self._selected_history_entry()
+        if not selected:
+            QMessageBox.information(self, "Info", "Zaznacz wpis historii do podglądu.")
+            return
+        dlg = QDialog(self)
+        dlg.setWindowTitle(f"Podgląd WZ ID={selected[0]}")
+        layout = QVBoxLayout(dlg)
+        layout.addWidget(QLabel(
+            f"Data: {selected[1]}\nMiejsce: {selected[2]}\nOdbiorca: {selected[3]}\nAdres: {selected[4]}"
+        ))
+        items_table = QTableWidget(0, 3)
+        items_table.setHorizontalHeaderLabels(["Kod", "Nazwa", "Ilość"])
+        items_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
+        items_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
+        items_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeToContents)
+        items_table.setEditTriggers(QTableWidget.NoEditTriggers)
+        for item in (selected[5] or []):
+            row = items_table.rowCount()
+            items_table.insertRow(row)
+            items_table.setItem(row, 0, QTableWidgetItem(str(item.get("code", ""))))
+            items_table.setItem(row, 1, QTableWidgetItem(str(item.get("name", ""))))
+            items_table.setItem(row, 2, QTableWidgetItem(str(item.get("qty", ""))))
+        layout.addWidget(items_table)
+        dlg.resize(760, 420)
+        dlg.exec()
 
     def on_generate_pdf(self) -> None:
         try:

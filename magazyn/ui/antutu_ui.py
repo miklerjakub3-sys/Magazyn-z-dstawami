@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import csv
+import re
 from typing import Optional
 
 from reportlab.lib import colors
@@ -8,7 +9,8 @@ from reportlab.lib.pagesizes import A4, landscape
 from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QUrl, Qt
+from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
     QFileDialog,
     QGridLayout,
@@ -76,7 +78,9 @@ class AntutuTab(QWidget):
         self.btn_pdf.clicked.connect(self.on_export_pdf)
         self.btn_import = QPushButton("Importuj dane startowe")
         self.btn_import.clicked.connect(self.on_import_seed)
-        for b in [self.btn_add, self.btn_delete, self.btn_export, self.btn_pdf, self.btn_import]:
+        self.btn_clear = QPushButton("Wyczyść formularz")
+        self.btn_clear.clicked.connect(self.clear_form)
+        for b in [self.btn_add, self.btn_delete, self.btn_export, self.btn_pdf, self.btn_import, self.btn_clear]:
             btn_row.addWidget(b)
         form.addLayout(btn_row, 6, 0, 1, 4)
         root.addWidget(form_box)
@@ -100,8 +104,11 @@ class AntutuTab(QWidget):
         self.lbl_apk_dir = QLabel(f"Folder stały: {ANTUTU_APK_DIR}")
         self.btn_apk_add = QPushButton("Dodaj plik APK do folderu")
         self.btn_apk_add.clicked.connect(self.on_add_apk)
+        self.btn_apk_open = QPushButton("Otwórz folder APK")
+        self.btn_apk_open.clicked.connect(self.on_open_apk_folder)
         apk_l.addWidget(self.lbl_apk_dir)
         apk_l.addWidget(self.btn_apk_add)
+        apk_l.addWidget(self.btn_apk_open)
         root.addWidget(apk_box)
 
     def refresh(self) -> None:
@@ -114,8 +121,9 @@ class AntutuTab(QWidget):
             self.table.insertRow(row_idx)
             for col, value in enumerate(row_data[:13]):
                 item = QTableWidgetItem("" if value is None else str(value))
-                if col in numeric_cols and value not in (None, ""):
-                    item.setData(Qt.EditRole, int(value))
+                sort_value = self._sort_value(col, value)
+                if sort_value is not None:
+                    item.setData(Qt.EditRole, sort_value)
                 self.table.setItem(row_idx, col, item)
         self.table.setSortingEnabled(True)
 
@@ -128,9 +136,7 @@ class AntutuTab(QWidget):
             score_gpu=self._to_int(self.ed_score_gpu.text()), score_mem=self._to_int(self.ed_score_mem.text()),
             score_ux=self._to_int(self.ed_score_ux.text()), notes=self.ed_notes.text().strip(),
         )
-        for w in [self.ed_producer, self.ed_model, self.ed_android, self.ed_processor, self.ed_ram, self.ed_antutu_version,
-                  self.ed_score_total, self.ed_score_cpu, self.ed_score_gpu, self.ed_score_mem, self.ed_score_ux, self.ed_notes]:
-            w.clear()
+        self.clear_form()
         self.refresh()
 
     def on_delete(self) -> None:
@@ -175,6 +181,10 @@ class AntutuTab(QWidget):
         if src:
             QMessageBox.information(self, "APK", f"Skopiowano do: {self.svc.copy_antutu_apk(src)}")
 
+    def on_open_apk_folder(self) -> None:
+        if not QDesktopServices.openUrl(QUrl.fromLocalFile(str(ANTUTU_APK_DIR))):
+            QMessageBox.warning(self, "APK", f"Nie udało się otworzyć folderu: {ANTUTU_APK_DIR}")
+
     def on_import_seed(self) -> None:
         seed = self._seed_rows()
         for row in seed:
@@ -188,6 +198,34 @@ class AntutuTab(QWidget):
         if not txt:
             return None
         return int(float(txt))
+
+    def clear_form(self) -> None:
+        for w in [
+            self.ed_producer, self.ed_model, self.ed_android, self.ed_processor, self.ed_ram, self.ed_antutu_version,
+            self.ed_score_total, self.ed_score_cpu, self.ed_score_gpu, self.ed_score_mem, self.ed_score_ux, self.ed_notes,
+        ]:
+            w.clear()
+        self.ed_producer.setFocus()
+
+    @staticmethod
+    def _sort_value(col: int, value):
+        if value in (None, ""):
+            return None
+        if col in {0, 7, 8, 9, 10, 11}:
+            return int(value)
+        if col == 3:  # Android
+            txt = str(value).strip().upper().replace("ANDROID", "").replace("A", "")
+            try:
+                return float(txt)
+            except ValueError:
+                return str(value)
+        if col == 5:  # RAM e.g. 4GB
+            m = re.search(r"\d+(?:[.,]\d+)?", str(value))
+            return float(m.group(0).replace(",", ".")) if m else str(value)
+        if col == 6:  # Wersja AnTuTu
+            parts = tuple(int(p) for p in re.findall(r"\d+", str(value)))
+            return parts or str(value)
+        return str(value)
 
     @staticmethod
     def _seed_rows():
